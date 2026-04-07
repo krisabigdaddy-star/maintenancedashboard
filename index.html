@@ -145,21 +145,16 @@
           );
         };
 
-        // --- Mock Initial Data ---
-        const mockData = [
-          { ชื่อเรื่อง: 'B082-2026-00020', REQUEST_DATE: '2026-01-15', ASSIGNED_DATE: '2026-01-16', DUE_DATE: '2026-01-25', COMPLETION_DATE: '2026-01-20', REQUESTER_DEPT: 'VGD/S', JOB_DESCRIPTION: 'ตู้เก็บสายฉีดน้ำดับเพลิง กระจกตู้แตก', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'MEDIUM', Plan_Working_Day: '3' },
-          { ชื่อเรื่อง: 'B082-2026-00167', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '', DUE_DATE: '2026-04-01', COMPLETION_DATE: '', REQUESTER_DEPT: 'VCP/E', JOB_DESCRIPTION: 'เครื่องปรับอากาศห้อง server คอยล์เย็นรั่ว', JOB_STATUS: 'NEW', JOB_TYPE: 'CM', PRIORITY: 'HIGH', Plan_Working_Day: '2' },
-          { ชื่อเรื่อง: 'B082-2026-00164', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '2026-04-03', DUE_DATE: '2026-04-05', COMPLETION_DATE: '2026-04-06', REQUESTER_DEPT: 'VCP/W', JOB_DESCRIPTION: 'พบพื้น บริเวณประตูรับสินค้า ชำรุด', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'MEDIUM', Plan_Working_Day: '5' },
-          { ชื่อเรื่อง: 'B082-2026-00165', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '2026-04-02', DUE_DATE: '2026-04-01', COMPLETION_DATE: '', REQUESTER_DEPT: 'VCP/W', JOB_DESCRIPTION: 'พบสนิมบริเวณหลังคา รบกวนซ่อมแซม', JOB_STATUS: 'IN PROGRESS', JOB_TYPE: 'PM', PRIORITY: 'LOW', Plan_Working_Day: '4' },
-          { ชื่อเรื่อง: 'B082-2026-00050', REQUEST_DATE: '2026-02-10', ASSIGNED_DATE: '2026-02-10', DUE_DATE: '2026-02-11', COMPLETION_DATE: '2026-02-11', REQUESTER_DEPT: 'VGD/S', JOB_DESCRIPTION: 'เปลี่ยนหลอดไฟทางเดิน', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'LOW', Plan_Working_Day: '1' },
-          { ชื่อเรื่อง: 'B082-2026-00080', REQUEST_DATE: '2026-03-05', ASSIGNED_DATE: '2026-03-06', DUE_DATE: '2026-03-06', COMPLETION_DATE: '2026-03-07', REQUESTER_DEPT: 'VCP/E', JOB_DESCRIPTION: 'ตรวจเช็คระบบไฟประจำเดือน', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'PM', PRIORITY: 'MEDIUM', Plan_Working_Day: '2' },
-        ];
-
         function App() {
-          const [data, setData] = useState(mockData);
-          const [fileName, setFileName] = useState('ข้อมูลตัวอย่าง (Mock Data)');
+          // ล้าง Mock Data เริ่มต้นเป็นอาร์เรย์ว่างทั้งหมด
+          const [data, setData] = useState([]);
+          const [fileName, setFileName] = useState('ยังไม่มีข้อมูล (กรุณาอัปโหลดไฟล์)');
           const [isXlsxLoaded, setIsXlsxLoaded] = useState(true); 
           const [errorMsg, setErrorMsg] = useState('');
+          
+          // State สำหรับ Dialogs
+          const [showWelcomeModal, setShowWelcomeModal] = useState(true);
+          const [uploadSuccessCount, setUploadSuccessCount] = useState(null);
           
           const [filterYears, setFilterYears] = useState([]);
           const [filterMonths, setFilterMonths] = useState([]);
@@ -191,8 +186,16 @@
                         DUE_DATE: parseDateValue(row.DUE_DATE || row['วันที่กำหนดเสร็จ']),
                         COMPLETION_DATE: parseDateValue(row.COMPLETION_DATE || row['วันที่แล้วเสร็จ'])
                     }));
+                    
+                    // อัปเดตข้อมูลเข้าระบบ
                     setData(cleanedData);
                     setFilterYears([]); setFilterMonths([]); setFilterDays([]);
+                    
+                    // ปิด Welcome Modal และเปิด Success Modal แทน
+                    setShowWelcomeModal(false);
+                    setUploadSuccessCount(cleanedData.length);
+                  } else {
+                    setErrorMsg('ไม่พบข้อมูลในไฟล์ หรือรูปแบบไฟล์ไม่ถูกต้อง');
                   }
                 } catch (error) {
                   console.error(error);
@@ -265,7 +268,7 @@
             let onTimeCount = 0, lateCount = 0, slaTotal = 0;
             let totalAssignDelay = 0, assignCount = 0;
             let totalRepairTime = 0, repairCount = 0;
-            let noSlaDataCount = 0; // เพิ่มตัวนับงานที่ทำเสร็จแต่ขาดข้อมูลวันที่
+            let noSlaDataCount = 0; 
             
             // For Overdue calculation
             let activeOverdueCount = 0, activeOnTrackCount = 0, activeNoDueCount = 0, activeTotalWithDue = 0;
@@ -288,7 +291,7 @@
                     noSlaDataCount++;
                   }
                 } else {
-                  noSlaDataCount++; // ถ้าระบุไม่ครบ ให้นับเป็นข้อมูลแหว่ง
+                  noSlaDataCount++; 
                 }
 
                 // 2. Pending/Assign Time (Assigned vs Request)
@@ -444,7 +447,56 @@
           const iH = tH - pY - pB;
 
           return (
-            <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 md:p-8">
+            <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 md:p-8 relative">
+              
+              {/* --- Modal Dialogs --- */}
+              
+              {/* 1. Welcome Modal */}
+              {showWelcomeModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                  <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center transform transition-all">
+                    <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                      <LucideIcon name="Upload" size={40} />
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-3">ยินดีต้อนรับสู่ Dashboard</h2>
+                    <p className="text-slate-600 mb-8 leading-relaxed">
+                      กรุณาอัปโหลดไฟล์ Excel <span className="font-semibold text-slate-800">"Maintenance Job"</span> เพื่อนำข้อมูลจริงเข้าสู่ระบบค่ะ (ค่าต่างๆ จะแสดงผลเป็น 0 จนกว่าจะมีการอัปโหลดข้อมูล)
+                    </p>
+                    <button 
+                      onClick={() => setShowWelcomeModal(false)} 
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-colors shadow-md hover:shadow-lg active:scale-95"
+                    >
+                      เข้าใจแล้ว
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Success Modal */}
+              {uploadSuccessCount !== null && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                  <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center transform transition-all">
+                    <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                      <LucideIcon name="CheckCircle" size={40} />
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-3">อัปโหลดสำเร็จ!</h2>
+                    <p className="text-slate-600 mb-8 leading-relaxed">
+                      พบข้อมูลงานซ่อมบำรุงทั้งหมด <br/>
+                      <span className="font-black text-emerald-600 text-3xl my-2 block">{uploadSuccessCount}</span> 
+                      รายการ พร้อมสำหรับการวิเคราะห์แล้วค่ะ
+                    </p>
+                    <button 
+                      onClick={() => setUploadSuccessCount(null)} 
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition-colors shadow-md hover:shadow-lg active:scale-95"
+                    >
+                      เริ่มดูข้อมูล
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* --- End Modal Dialogs --- */}
+
               {/* Header */}
               <div className="max-w-7xl mx-auto mb-8">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
