@@ -148,9 +148,9 @@
         // --- Mock Initial Data ---
         const mockData = [
           { ชื่อเรื่อง: 'B082-2026-00020', REQUEST_DATE: '2026-01-15', ASSIGNED_DATE: '2026-01-16', DUE_DATE: '2026-01-25', COMPLETION_DATE: '2026-01-20', REQUESTER_DEPT: 'VGD/S', JOB_DESCRIPTION: 'ตู้เก็บสายฉีดน้ำดับเพลิง กระจกตู้แตก', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'MEDIUM', Plan_Working_Day: '3' },
-          { ชื่อเรื่อง: 'B082-2026-00167', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '', DUE_DATE: '2026-04-10', COMPLETION_DATE: '', REQUESTER_DEPT: 'VCP/E', JOB_DESCRIPTION: 'เครื่องปรับอากาศห้อง server คอยล์เย็นรั่ว', JOB_STATUS: 'NEW', JOB_TYPE: 'CM', PRIORITY: 'HIGH', Plan_Working_Day: '2' },
+          { ชื่อเรื่อง: 'B082-2026-00167', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '', DUE_DATE: '2026-04-01', COMPLETION_DATE: '', REQUESTER_DEPT: 'VCP/E', JOB_DESCRIPTION: 'เครื่องปรับอากาศห้อง server คอยล์เย็นรั่ว', JOB_STATUS: 'NEW', JOB_TYPE: 'CM', PRIORITY: 'HIGH', Plan_Working_Day: '2' },
           { ชื่อเรื่อง: 'B082-2026-00164', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '2026-04-03', DUE_DATE: '2026-04-05', COMPLETION_DATE: '2026-04-06', REQUESTER_DEPT: 'VCP/W', JOB_DESCRIPTION: 'พบพื้น บริเวณประตูรับสินค้า ชำรุด', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'MEDIUM', Plan_Working_Day: '5' },
-          { ชื่อเรื่อง: 'B082-2026-00165', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '2026-04-02', DUE_DATE: '2026-04-08', COMPLETION_DATE: '', REQUESTER_DEPT: 'VCP/W', JOB_DESCRIPTION: 'พบสนิมบริเวณหลังคา รบกวนซ่อมแซม', JOB_STATUS: 'IN PROGRESS', JOB_TYPE: 'PM', PRIORITY: 'LOW', Plan_Working_Day: '4' },
+          { ชื่อเรื่อง: 'B082-2026-00165', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '2026-04-02', DUE_DATE: '2026-04-01', COMPLETION_DATE: '', REQUESTER_DEPT: 'VCP/W', JOB_DESCRIPTION: 'พบสนิมบริเวณหลังคา รบกวนซ่อมแซม', JOB_STATUS: 'IN PROGRESS', JOB_TYPE: 'PM', PRIORITY: 'LOW', Plan_Working_Day: '4' },
           { ชื่อเรื่อง: 'B082-2026-00050', REQUEST_DATE: '2026-02-10', ASSIGNED_DATE: '2026-02-10', DUE_DATE: '2026-02-11', COMPLETION_DATE: '2026-02-11', REQUESTER_DEPT: 'VGD/S', JOB_DESCRIPTION: 'เปลี่ยนหลอดไฟทางเดิน', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'LOW', Plan_Working_Day: '1' },
           { ชื่อเรื่อง: 'B082-2026-00080', REQUEST_DATE: '2026-03-05', ASSIGNED_DATE: '2026-03-06', DUE_DATE: '2026-03-06', COMPLETION_DATE: '2026-03-07', REQUESTER_DEPT: 'VCP/E', JOB_DESCRIPTION: 'ตรวจเช็คระบบไฟประจำเดือน', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'PM', PRIORITY: 'MEDIUM', Plan_Working_Day: '2' },
         ];
@@ -158,7 +158,7 @@
         function App() {
           const [data, setData] = useState(mockData);
           const [fileName, setFileName] = useState('ข้อมูลตัวอย่าง (Mock Data)');
-          const [isXlsxLoaded, setIsXlsxLoaded] = useState(true); // Default to true since it's loaded in <head>
+          const [isXlsxLoaded, setIsXlsxLoaded] = useState(true); 
           const [errorMsg, setErrorMsg] = useState('');
           
           const [filterYears, setFilterYears] = useState([]);
@@ -265,9 +265,16 @@
             let onTimeCount = 0, lateCount = 0, slaTotal = 0;
             let totalAssignDelay = 0, assignCount = 0;
             let totalRepairTime = 0, repairCount = 0;
+            let noSlaDataCount = 0; // เพิ่มตัวนับงานที่ทำเสร็จแต่ขาดข้อมูลวันที่
+            
+            // For Overdue calculation
+            let activeOverdueCount = 0, activeOnTrackCount = 0, activeNoDueCount = 0, activeTotalWithDue = 0;
+            const today = new Date();
+            today.setHours(0,0,0,0);
 
             filteredData.forEach(item => {
               const status = (item.JOB_STATUS || '').toUpperCase().trim();
+              
               if (status === 'COMPLETED') {
                 // 1. SLA Compliance (Completion vs Due)
                 if (item.COMPLETION_DATE && item.DUE_DATE) {
@@ -277,8 +284,13 @@
                     comp.setHours(0,0,0,0); due.setHours(0,0,0,0);
                     if (comp <= due) onTimeCount++; else lateCount++;
                     slaTotal++;
+                  } else {
+                    noSlaDataCount++;
                   }
+                } else {
+                  noSlaDataCount++; // ถ้าระบุไม่ครบ ให้นับเป็นข้อมูลแหว่ง
                 }
+
                 // 2. Pending/Assign Time (Assigned vs Request)
                 if (item.REQUEST_DATE && item.ASSIGNED_DATE) {
                   const req = new Date(item.REQUEST_DATE);
@@ -299,12 +311,35 @@
                     if (diff >= 0 && diff < 3650) { totalRepairTime += diff; repairCount++; }
                   }
                 }
+              } else if (status !== 'CANCELLED') {
+                 // Active Jobs (Not completed & Not cancelled)
+                 if (item.DUE_DATE) {
+                     const due = new Date(item.DUE_DATE);
+                     if (!isNaN(due.getTime())) {
+                         due.setHours(0,0,0,0);
+                         activeTotalWithDue++;
+                         if (due < today) {
+                             activeOverdueCount++;
+                         } else {
+                             activeOnTrackCount++;
+                         }
+                     } else {
+                         activeNoDueCount++;
+                     }
+                 } else {
+                     activeNoDueCount++;
+                 }
               }
             });
 
             return {
-              onTimeCount, lateCount, slaTotal,
+              onTimeCount, lateCount, slaTotal, noSlaDataCount,
               onTimePct: slaTotal > 0 ? (onTimeCount / slaTotal) * 100 : 0,
+              
+              activeOverdueCount, activeOnTrackCount, activeNoDueCount, activeTotalWithDue,
+              overduePct: activeTotalWithDue > 0 ? (activeOverdueCount / activeTotalWithDue) * 100 : 0,
+              onTrackPct: activeTotalWithDue > 0 ? (activeOnTrackCount / activeTotalWithDue) * 100 : 0,
+
               avgAssignDays: assignCount > 0 ? (totalAssignDelay / assignCount).toFixed(1) : 0,
               avgRepairDays: repairCount > 0 ? (totalRepairTime / repairCount).toFixed(1) : 0,
               avgTotalLeadTime: assignCount > 0 && repairCount > 0 ? ((totalAssignDelay / assignCount) + (totalRepairTime / repairCount)).toFixed(1) : 0
@@ -481,35 +516,41 @@
                 </h2>
                 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* 1. SLA Hit Rate */}
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+                  {/* 1. SLA Hit Rate (Completed Jobs Only) */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center justify-center relative">
                     <div className="flex w-full items-center gap-2 mb-4">
                       <LucideIcon name="Target" size={20} className="text-indigo-500" />
                       <div className="flex flex-col">
                         <h3 className="text-lg font-bold text-slate-800">อัตราการส่งมอบงานตรงเวลา (SLA On-Time)</h3>
-                        <p className="text-xs text-slate-500">วัดจากงานที่ทำเสร็จแล้วเทียบกับวันที่กำหนด (DUE_DATE)</p>
+                        <p className="text-xs text-slate-500">วัดเฉพาะงานที่ทำ <span className="font-bold text-emerald-600">COMPLETED</span> แล้วเทียบกับกำหนด (DUE_DATE)</p>
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-8 w-full justify-center">
                       <div className="relative w-36 h-36">
-                        <svg viewBox="0 0 42 42" className="w-full h-full drop-shadow-sm -rotate-90">
-                          <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f1f5f9" strokeWidth="6"></circle>
-                          {efficiencyData.onTimePct > 0 && (
-                            <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#10b981" strokeWidth="6" 
-                              strokeDasharray={`${efficiencyData.onTimePct} ${100 - efficiencyData.onTimePct}`} strokeDashoffset={100}>
-                            </circle>
-                          )}
-                          {efficiencyData.onTimePct < 100 && efficiencyData.slaTotal > 0 && (
-                            <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f43f5e" strokeWidth="6" 
-                              strokeDasharray={`${100 - efficiencyData.onTimePct} ${efficiencyData.onTimePct}`} strokeDashoffset={100 - efficiencyData.onTimePct}>
-                            </circle>
-                          )}
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center rounded-full pointer-events-none">
-                          <span className="text-2xl font-bold text-slate-800">{efficiencyData.onTimePct.toFixed(0)}%</span>
-                          <span className="text-[10px] font-medium text-slate-500">ตรงเวลา</span>
-                        </div>
+                        {efficiencyData.slaTotal > 0 ? (
+                          <>
+                            <svg viewBox="0 0 42 42" className="w-full h-full drop-shadow-sm -rotate-90">
+                              <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f1f5f9" strokeWidth="6"></circle>
+                              {efficiencyData.onTimePct > 0 && (
+                                <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#10b981" strokeWidth="6" 
+                                  strokeDasharray={`${efficiencyData.onTimePct} ${100 - efficiencyData.onTimePct}`} strokeDashoffset={100}>
+                                </circle>
+                              )}
+                              {efficiencyData.onTimePct < 100 && efficiencyData.slaTotal > 0 && (
+                                <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f59e0b" strokeWidth="6" 
+                                  strokeDasharray={`${100 - efficiencyData.onTimePct} ${efficiencyData.onTimePct}`} strokeDashoffset={100 - efficiencyData.onTimePct}>
+                                </circle>
+                              )}
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center rounded-full pointer-events-none">
+                              <span className="text-2xl font-bold text-slate-800">{efficiencyData.onTimePct.toFixed(0)}%</span>
+                              <span className="text-[10px] font-medium text-slate-500">ตรงเวลา</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 text-center">ไม่มีข้อมูลเพียงพอ<br/>สำหรับคำนวณ</div>
+                        )}
                       </div>
 
                       <div className="flex flex-col gap-4">
@@ -520,80 +561,148 @@
                             <p className="text-xl font-bold text-emerald-600">{efficiencyData.onTimeCount} <span className="text-xs font-medium">งาน</span></p>
                           </div>
                         </div>
+                        <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex items-center gap-3">
+                          <div className="bg-amber-500 w-2 h-8 rounded-full"></div>
+                          <div>
+                            <p className="text-xs font-semibold text-amber-800">ล่าช้า (Late)</p>
+                            <p className="text-xl font-bold text-amber-600">{efficiencyData.lateCount} <span className="text-xs font-medium">งาน</span></p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footnote for missing data */}
+                    {efficiencyData.noSlaDataCount > 0 && (
+                      <p className="text-[10px] text-amber-600 mt-4 text-center w-full bg-amber-50 py-1.5 rounded">
+                        * มีงาน Completed {efficiencyData.noSlaDataCount} งาน ที่ไม่ได้ระบุวันที่เสร็จ/กำหนดเสร็จ จึงไม่นำมารวมในกราฟนี้
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 2. Active Jobs Overdue Status (Uncompleted Jobs vs Today) */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+                    <div className="flex w-full items-center gap-2 mb-4">
+                      <LucideIcon name="AlertTriangle" size={20} className="text-rose-500" />
+                      <div className="flex flex-col">
+                        <h3 className="text-lg font-bold text-slate-800">สถานะงานค้างปัจจุบัน (Active Jobs Overdue)</h3>
+                        <p className="text-xs text-slate-500">วัดเฉพาะงานที่ <span className="font-bold text-rose-600">ยังไม่เสร็จ</span> เทียบกับวันที่ปัจจุบัน (Today)</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-8 w-full justify-center">
+                      <div className="relative w-36 h-36">
+                        {efficiencyData.activeTotalWithDue > 0 ? (
+                          <>
+                            <svg viewBox="0 0 42 42" className="w-full h-full drop-shadow-sm -rotate-90">
+                              <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f1f5f9" strokeWidth="6"></circle>
+                              {efficiencyData.overduePct > 0 && (
+                                <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f43f5e" strokeWidth="6" 
+                                  strokeDasharray={`${efficiencyData.overduePct} ${100 - efficiencyData.overduePct}`} strokeDashoffset={100}>
+                                </circle>
+                              )}
+                              {efficiencyData.onTrackPct > 0 && (
+                                <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#3b82f6" strokeWidth="6" 
+                                  strokeDasharray={`${efficiencyData.onTrackPct} ${100 - efficiencyData.onTrackPct}`} strokeDashoffset={100 - efficiencyData.overduePct}>
+                                </circle>
+                              )}
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center rounded-full pointer-events-none">
+                              <span className="text-2xl font-bold text-rose-600">{efficiencyData.activeOverdueCount}</span>
+                              <span className="text-[10px] font-medium text-slate-500">เกินกำหนด</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 text-center">ไม่มีงานค้าง<br/>ที่ระบุกำหนดการ</div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-4">
                         <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl flex items-center gap-3">
                           <div className="bg-rose-500 w-2 h-8 rounded-full"></div>
                           <div>
-                            <p className="text-xs font-semibold text-rose-800">ล่าช้า (Late)</p>
-                            <p className="text-xl font-bold text-rose-600">{efficiencyData.lateCount} <span className="text-xs font-medium">งาน</span></p>
+                            <p className="text-xs font-semibold text-rose-800">เกินกำหนด (Overdue)</p>
+                            <p className="text-xl font-bold text-rose-600">{efficiencyData.activeOverdueCount} <span className="text-xs font-medium">งาน</span></p>
+                          </div>
+                        </div>
+                        <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl flex items-center gap-3">
+                          <div className="bg-blue-500 w-2 h-8 rounded-full"></div>
+                          <div>
+                            <p className="text-xs font-semibold text-blue-800">อยู่ในกำหนด (On-Track)</p>
+                            <p className="text-xl font-bold text-blue-600">{efficiencyData.activeOnTrackCount} <span className="text-xs font-medium">งาน</span></p>
                           </div>
                         </div>
                       </div>
+                    </div>
+                    {efficiencyData.activeNoDueCount > 0 && (
+                      <p className="text-[10px] text-slate-400 mt-4 text-center w-full">
+                        * มีงานที่ยังไม่เสร็จแต่ไม่ได้ระบุ DUE_DATE จำนวน {efficiencyData.activeNoDueCount} งาน
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Lead Time Pipeline (Full Width) */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mt-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <LucideIcon name="Activity" size={20} className="text-indigo-500" />
+                    <div className="flex flex-col">
+                      <h3 className="text-lg font-bold text-slate-800">ค่าเฉลี่ยระยะเวลาในแต่ละขั้นตอน (Lead Time Pipeline)</h3>
+                      <p className="text-xs text-slate-500">วิเคราะห์คอขวด (Bottleneck) จากวันที่แจ้งจนถึงวันที่ซ่อมเสร็จ</p>
                     </div>
                   </div>
 
-                  {/* 2. Lead Time Pipeline */}
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                    <div className="flex items-center gap-2 mb-6">
-                      <LucideIcon name="Activity" size={20} className="text-indigo-500" />
-                      <div className="flex flex-col">
-                        <h3 className="text-lg font-bold text-slate-800">ค่าเฉลี่ยระยะเวลาในแต่ละขั้นตอน (Lead Time Pipeline)</h3>
-                        <p className="text-xs text-slate-500">วิเคราะห์คอขวด (Bottleneck) จากวันที่แจ้งจนถึงวันที่ซ่อมเสร็จ</p>
+                  <div className="flex flex-col gap-2 mt-4 relative max-w-4xl mx-auto">
+                    {/* Connector Line */}
+                    <div className="absolute top-6 left-6 right-6 h-1 bg-slate-100 rounded-full z-0"></div>
+
+                    <div className="flex justify-between relative z-10">
+                      {/* Step 1: Request */}
+                      <div className="flex flex-col items-center w-24">
+                        <div className="w-12 h-12 bg-white border-4 border-blue-500 rounded-full flex items-center justify-center text-blue-600 mb-2 shadow-sm bg-blue-50">
+                          <LucideIcon name="Calendar" size={20} />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">แจ้งซ่อม</span>
+                        <span className="text-[10px] text-slate-400">(REQUEST)</span>
+                      </div>
+
+                      {/* Delay 1 */}
+                      <div className="flex flex-col items-center justify-start pt-2 flex-1">
+                        <span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-600 border border-slate-200">
+                          เฉลี่ย {efficiencyData.avgAssignDays} วัน
+                        </span>
+                        <span className="text-[10px] text-slate-400 mt-1 text-center leading-tight">เวลารอจ่ายงาน<br/>(Pending Time)</span>
+                      </div>
+
+                      {/* Step 2: Assigned */}
+                      <div className="flex flex-col items-center w-24">
+                        <div className="w-12 h-12 bg-white border-4 border-amber-500 rounded-full flex items-center justify-center text-amber-600 mb-2 shadow-sm bg-amber-50">
+                          <LucideIcon name="Wrench" size={20} />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">จ่าย/รับงาน</span>
+                        <span className="text-[10px] text-slate-400">(ASSIGNED)</span>
+                      </div>
+
+                      {/* Delay 2 */}
+                      <div className="flex flex-col items-center justify-start pt-2 flex-1">
+                        <span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-600 border border-slate-200">
+                          เฉลี่ย {efficiencyData.avgRepairDays} วัน
+                        </span>
+                        <span className="text-[10px] text-slate-400 mt-1 text-center leading-tight">เวลาลงมือซ่อมจริง<br/>(Repair Time)</span>
+                      </div>
+
+                      {/* Step 3: Completed */}
+                      <div className="flex flex-col items-center w-24">
+                        <div className="w-12 h-12 bg-white border-4 border-emerald-500 rounded-full flex items-center justify-center text-emerald-600 mb-2 shadow-sm bg-emerald-50">
+                          <LucideIcon name="CheckCircle" size={20} />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">ซ่อมเสร็จ</span>
+                        <span className="text-[10px] text-slate-400">(COMPLETED)</span>
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-2 mt-4 relative">
-                      {/* Connector Line */}
-                      <div className="absolute top-6 left-6 right-6 h-1 bg-slate-100 rounded-full z-0"></div>
-
-                      <div className="flex justify-between relative z-10">
-                        {/* Step 1: Request */}
-                        <div className="flex flex-col items-center w-24">
-                          <div className="w-12 h-12 bg-white border-4 border-blue-500 rounded-full flex items-center justify-center text-blue-600 mb-2 shadow-sm bg-blue-50">
-                            <LucideIcon name="Calendar" size={20} />
-                          </div>
-                          <span className="text-xs font-bold text-slate-700">แจ้งซ่อม</span>
-                          <span className="text-[10px] text-slate-400">(REQUEST)</span>
-                        </div>
-
-                        {/* Delay 1 */}
-                        <div className="flex flex-col items-center justify-start pt-2 flex-1">
-                          <span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-600 border border-slate-200">
-                            เฉลี่ย {efficiencyData.avgAssignDays} วัน
-                          </span>
-                          <span className="text-[10px] text-slate-400 mt-1 text-center leading-tight">เวลารอจ่ายงาน<br/>(Pending Time)</span>
-                        </div>
-
-                        {/* Step 2: Assigned */}
-                        <div className="flex flex-col items-center w-24">
-                          <div className="w-12 h-12 bg-white border-4 border-amber-500 rounded-full flex items-center justify-center text-amber-600 mb-2 shadow-sm bg-amber-50">
-                            <LucideIcon name="Wrench" size={20} />
-                          </div>
-                          <span className="text-xs font-bold text-slate-700">จ่าย/รับงาน</span>
-                          <span className="text-[10px] text-slate-400">(ASSIGNED)</span>
-                        </div>
-
-                        {/* Delay 2 */}
-                        <div className="flex flex-col items-center justify-start pt-2 flex-1">
-                          <span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-600 border border-slate-200">
-                            เฉลี่ย {efficiencyData.avgRepairDays} วัน
-                          </span>
-                          <span className="text-[10px] text-slate-400 mt-1 text-center leading-tight">เวลาลงมือซ่อมจริง<br/>(Repair Time)</span>
-                        </div>
-
-                        {/* Step 3: Completed */}
-                        <div className="flex flex-col items-center w-24">
-                          <div className="w-12 h-12 bg-white border-4 border-emerald-500 rounded-full flex items-center justify-center text-emerald-600 mb-2 shadow-sm bg-emerald-50">
-                            <LucideIcon name="CheckCircle" size={20} />
-                          </div>
-                          <span className="text-xs font-bold text-slate-700">ซ่อมเสร็จ</span>
-                          <span className="text-[10px] text-slate-400">(COMPLETED)</span>
-                        </div>
-                      </div>
-
-                      <div className="mt-8 pt-4 border-t border-slate-100 flex justify-between items-center px-4 bg-slate-50 rounded-xl">
-                        <span className="text-sm font-semibold text-slate-600">ระยะเวลารวมเฉลี่ยต่อ 1 งาน (Total Lead Time):</span>
-                        <span className="text-2xl font-black text-indigo-600">{efficiencyData.avgTotalLeadTime} <span className="text-sm font-medium text-slate-500">วัน</span></span>
-                      </div>
+                    <div className="mt-8 pt-4 border-t border-slate-100 flex justify-between items-center px-4 bg-slate-50 rounded-xl">
+                      <span className="text-sm font-semibold text-slate-600">ระยะเวลารวมเฉลี่ยต่อ 1 งาน (Total Lead Time):</span>
+                      <span className="text-2xl font-black text-indigo-600">{efficiencyData.avgTotalLeadTime} <span className="text-sm font-medium text-slate-500">วัน</span></span>
                     </div>
                   </div>
                 </div>
