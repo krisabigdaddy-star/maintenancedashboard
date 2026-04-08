@@ -146,6 +146,16 @@
           );
         };
 
+        // --- Mock Initial Data ---
+        const mockData = [
+          { ชื่อเรื่อง: 'B082-2026-00020', REQUEST_DATE: '2026-01-15', ASSIGNED_DATE: '2026-01-16', DUE_DATE: '2026-01-25', COMPLETION_DATE: '2026-01-20', REQUESTER_DEPT: 'VGD/S', JOB_DESCRIPTION: 'ตู้เก็บสายฉีดน้ำดับเพลิง กระจกตู้แตก', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'MEDIUM', Plan_Working_Day: '3' },
+          { ชื่อเรื่อง: 'B082-2026-00167', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '', DUE_DATE: '2026-04-10', COMPLETION_DATE: '', REQUESTER_DEPT: 'VCP/E', JOB_DESCRIPTION: 'เครื่องปรับอากาศห้อง server คอยล์เย็นรั่ว', JOB_STATUS: 'NEW', JOB_TYPE: 'CM', PRIORITY: 'HIGH', Plan_Working_Day: '2' },
+          { ชื่อเรื่อง: 'B082-2026-00164', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '2026-04-03', DUE_DATE: '2026-04-05', COMPLETION_DATE: '2026-04-06', REQUESTER_DEPT: 'VCP/W', JOB_DESCRIPTION: 'พบพื้น บริเวณประตูรับสินค้า ชำรุด', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'MEDIUM', Plan_Working_Day: '5' },
+          { ชื่อเรื่อง: 'B082-2026-00165', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '2026-04-02', DUE_DATE: '2026-04-08', COMPLETION_DATE: '', REQUESTER_DEPT: 'VCP/W', JOB_DESCRIPTION: 'พบสนิมบริเวณหลังคา รบกวนซ่อมแซม', JOB_STATUS: 'IN PROGRESS', JOB_TYPE: 'PM', PRIORITY: 'LOW', Plan_Working_Day: '4' },
+          { ชื่อเรื่อง: 'B082-2026-00050', REQUEST_DATE: '2026-02-10', ASSIGNED_DATE: '2026-02-10', DUE_DATE: '2026-02-11', COMPLETION_DATE: '2026-02-11', REQUESTER_DEPT: 'VGD/S', JOB_DESCRIPTION: 'เปลี่ยนหลอดไฟทางเดิน', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'LOW', Plan_Working_Day: '1' },
+          { ชื่อเรื่อง: 'B082-2026-00080', REQUEST_DATE: '2026-03-05', ASSIGNED_DATE: '2026-03-06', DUE_DATE: '2026-03-06', COMPLETION_DATE: '2026-03-07', REQUESTER_DEPT: 'VCP/E', JOB_DESCRIPTION: 'ตรวจเช็คระบบไฟประจำเดือน', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'PM', PRIORITY: 'MEDIUM', Plan_Working_Day: '2' },
+        ];
+
         function App() {
           // ล้าง Mock Data เริ่มต้นเป็นอาร์เรย์ว่างทั้งหมด
           const [data, setData] = useState([]);
@@ -408,34 +418,55 @@
               const assignedTo = item.ASSIGNED_TO ? String(item.ASSIGNED_TO).trim() : '';
               const coAssignedTo = item.CO_ASSIGNED_TO ? String(item.CO_ASSIGNED_TO).trim() : '';
 
-              const processNames = (nameStr, role) => {
-                if (!nameStr || nameStr === '-' || nameStr.toUpperCase() === 'N/A') return;
-                const names = nameStr.split(',').map(n => n.trim()).filter(n => n);
-                names.forEach(name => {
-                   if (!stats[name]) {
-                     stats[name] = { 
-                        name, 
-                        main: { NEW: 0, 'IN PROGRESS': 0, OTHER: 0, COMPLETED: 0, total: 0 },
-                        co: { NEW: 0, 'IN PROGRESS': 0, OTHER: 0, COMPLETED: 0, total: 0 },
-                        totalMain: 0,
-                        totalCo: 0,
-                        grandTotal: 0,
-                        activeTotal: 0
-                     };
-                   }
-                   stats[name][role][statusCat]++;
-                   stats[name][role].total++;
-                   if (role === 'main') stats[name].totalMain++;
-                   if (role === 'co') stats[name].totalCo++;
-                   stats[name].grandTotal++;
-                   if (statusCat !== 'COMPLETED') {
-                     stats[name].activeTotal++;
-                   }
-                });
-              };
+              let mainNames = assignedTo ? assignedTo.split(',').map(n => n.trim()).filter(n => n && n !== '-' && n.toUpperCase() !== 'N/A') : [];
+              let coNames = coAssignedTo ? coAssignedTo.split(',').map(n => n.trim()).filter(n => n && n !== '-' && n.toUpperCase() !== 'N/A') : [];
 
-              processNames(assignedTo, 'main');
-              processNames(coAssignedTo, 'co');
+              // ดักจับงานที่ไม่มีการมอบหมายให้ใครเลย
+              if (mainNames.length === 0 && coNames.length === 0) {
+                mainNames = ["ยังไม่มอบหมาย (Unassigned)"];
+              }
+
+              mainNames.forEach(name => {
+                 if (!stats[name]) {
+                   stats[name] = { 
+                      name, 
+                      main: { NEW: 0, 'IN PROGRESS': 0, OTHER: 0, COMPLETED: 0, total: 0 },
+                      co: { NEW: 0, 'IN PROGRESS': 0, OTHER: 0, COMPLETED: 0, total: 0 },
+                      totalMain: 0,
+                      totalCo: 0,
+                      grandTotal: 0,
+                      activeTotal: 0
+                   };
+                 }
+                 stats[name]['main'][statusCat]++;
+                 stats[name]['main'].total++;
+                 stats[name].totalMain++;
+                 stats[name].grandTotal++;
+                 if (statusCat !== 'COMPLETED') {
+                   stats[name].activeTotal++;
+                 }
+              });
+
+              coNames.forEach(name => {
+                 if (!stats[name]) {
+                   stats[name] = { 
+                      name, 
+                      main: { NEW: 0, 'IN PROGRESS': 0, OTHER: 0, COMPLETED: 0, total: 0 },
+                      co: { NEW: 0, 'IN PROGRESS': 0, OTHER: 0, COMPLETED: 0, total: 0 },
+                      totalMain: 0,
+                      totalCo: 0,
+                      grandTotal: 0,
+                      activeTotal: 0
+                   };
+                 }
+                 stats[name]['co'][statusCat]++;
+                 stats[name]['co'].total++;
+                 stats[name].totalCo++;
+                 stats[name].grandTotal++;
+                 if (statusCat !== 'COMPLETED') {
+                   stats[name].activeTotal++;
+                 }
+              });
             });
 
             const workers = Object.values(stats);
@@ -566,9 +597,13 @@
               }
 
               const assignedTo = item.ASSIGNED_TO ? String(item.ASSIGNED_TO).trim() : '';
-              if (!assignedTo || assignedTo === '-' || assignedTo.toUpperCase() === 'N/A') return;
+              let names = assignedTo ? assignedTo.split(',').map(n => n.trim()).filter(n => n && n !== '-' && n.toUpperCase() !== 'N/A') : [];
               
-              const names = assignedTo.split(',').map(n => n.trim()).filter(n => n);
+              // ดักจับงานที่ไม่มีคนรับผิดชอบหลัก
+              if (names.length === 0) {
+                  names = ["ยังไม่มอบหมาย (Unassigned)"];
+              }
+
               names.forEach(name => {
                  if (!stats[name]) {
                    stats[name] = { 
@@ -1142,11 +1177,16 @@
                   </div>
 
                   <div className="overflow-y-auto max-h-[350px] pr-2 space-y-4">
-                    {workerCombinedData.workloadWorkers.length > 0 ? workerCombinedData.workloadWorkers.map((worker, idx) => (
+                    {workerCombinedData.workloadWorkers.length > 0 ? workerCombinedData.workloadWorkers.map((worker, idx) => {
+                      const isUnassigned = worker.name === "ยังไม่มอบหมาย (Unassigned)";
+                      const avatarBg = isUnassigned ? "bg-slate-100 text-slate-500" : "bg-purple-100 text-purple-600";
+                      const avatarInitials = isUnassigned ? "??" : worker.name.substring(0, 2).toUpperCase();
+
+                      return (
                       <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-4 p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-200">
                         <div className="w-full sm:w-1/3 flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
-                            {worker.name.substring(0, 2).toUpperCase()}
+                          <div className={`w-10 h-10 rounded-full ${avatarBg} flex items-center justify-center font-bold text-sm flex-shrink-0`}>
+                            {avatarInitials}
                           </div>
                           <span className="font-semibold text-slate-700 truncate" title={worker.name}>{worker.name}</span>
                         </div>
@@ -1171,7 +1211,8 @@
                           </span>
                         </div>
                       </div>
-                    )) : (
+                      )
+                    }) : (
                       <div className="text-center py-8 text-slate-400">ไม่พบข้อมูลการมอบหมายงาน</div>
                     )}
                   </div>
@@ -1209,15 +1250,20 @@
                         </tr>
                       </thead>
                       <tbody className="text-sm divide-y divide-slate-100">
-                        {workerCombinedData.tableWorkers.length > 0 ? workerCombinedData.tableWorkers.map((worker, idx) => (
+                        {workerCombinedData.tableWorkers.length > 0 ? workerCombinedData.tableWorkers.map((worker, idx) => {
+                          const isUnassigned = worker.name === "ยังไม่มอบหมาย (Unassigned)";
+                          const avatarBg = isUnassigned ? "bg-slate-100 text-slate-500" : "bg-teal-100 text-teal-600";
+                          const avatarInitials = isUnassigned ? "??" : worker.name.substring(0, 2).toUpperCase();
+
+                          return (
                           <React.Fragment key={idx}>
                             {/* Main Role Row */}
                             {worker.totalMain > 0 && (
                               <tr className="hover:bg-slate-50/80 transition-colors">
                                 <td className="p-4 font-medium text-slate-800 whitespace-nowrap border-b border-slate-100" rowSpan={worker.totalCo > 0 ? 2 : 1}>
                                   <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center font-bold text-xs flex-shrink-0">
-                                      {worker.name.substring(0, 2).toUpperCase()}
+                                    <div className={`w-8 h-8 rounded-full ${avatarBg} flex items-center justify-center font-bold text-xs flex-shrink-0`}>
+                                      {avatarInitials}
                                     </div>
                                     <span className="truncate" title={worker.name}>{worker.name}</span>
                                   </div>
@@ -1239,8 +1285,8 @@
                                 {worker.totalMain === 0 && (
                                   <td className="p-4 font-medium text-slate-800 whitespace-nowrap border-b border-slate-100">
                                     <div className="flex items-center gap-2">
-                                      <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center font-bold text-xs flex-shrink-0">
-                                        {worker.name.substring(0, 2).toUpperCase()}
+                                      <div className={`w-8 h-8 rounded-full ${avatarBg} flex items-center justify-center font-bold text-xs flex-shrink-0`}>
+                                        {avatarInitials}
                                       </div>
                                       <span className="truncate" title={worker.name}>{worker.name}</span>
                                     </div>
@@ -1260,7 +1306,8 @@
                               </tr>
                             )}
                           </React.Fragment>
-                        )) : (
+                          )
+                        }) : (
                           <tr>
                             <td colSpan="8" className="p-8 text-center text-slate-400">ไม่พบข้อมูลการมอบหมายงาน</td>
                           </tr>
@@ -1281,11 +1328,16 @@
                   </div>
 
                   <div className="overflow-y-auto max-h-[400px] pr-2 space-y-4">
-                    {workerPerformanceData.workers.length > 0 ? workerPerformanceData.workers.map((worker, idx) => (
+                    {workerPerformanceData.workers.length > 0 ? workerPerformanceData.workers.map((worker, idx) => {
+                      const isUnassigned = worker.name === "ยังไม่มอบหมาย (Unassigned)";
+                      const avatarBg = isUnassigned ? "bg-slate-100 text-slate-500" : "bg-indigo-100 text-indigo-600";
+                      const avatarInitials = isUnassigned ? "??" : worker.name.substring(0, 2).toUpperCase();
+
+                      return (
                       <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-4 p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-200">
                         <div className="w-full sm:w-1/3 flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
-                            {worker.name.substring(0, 2).toUpperCase()}
+                          <div className={`w-10 h-10 rounded-full ${avatarBg} flex items-center justify-center font-bold text-sm flex-shrink-0`}>
+                            {avatarInitials}
                           </div>
                           <span className="font-semibold text-slate-700 truncate" title={worker.name}>{worker.name}</span>
                         </div>
@@ -1338,7 +1390,8 @@
                           })()}
                         </div>
                       </div>
-                    )) : (
+                      )
+                    }) : (
                       <div className="text-center py-8 text-slate-400">ไม่พบข้อมูลการประเมินการส่งมอบงาน</div>
                     )}
                   </div>
