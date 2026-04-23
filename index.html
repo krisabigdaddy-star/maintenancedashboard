@@ -244,6 +244,7 @@
                     const cleanedData = validData.map(row => ({ 
                         ...row, 
                         REQUEST_DATE: parseDateValue(row.REQUEST_DATE || row['วันที่แจ้ง']),
+                        APPROVE_REQ_DATE: parseDateValue(row.APPROVE_REQ_DATE || row['วันที่อนุมัติแจ้งซ่อม']),
                         ASSIGNED_DATE: parseDateValue(row.ASSIGNED_DATE || row['วันที่จ่ายงาน']),
                         DUE_DATE: parseDateValue(row.DUE_DATE || row['วันที่กำหนดเสร็จ']),
                         COMPLETION_DATE: parseDateValue(row.COMPLETION_DATE || row['วันที่แล้วเสร็จ'])
@@ -273,7 +274,8 @@
           const { years, months, days, assignees } = useMemo(() => {
             const ySet = new Set(), mSet = new Set(), dSet = new Set(), aSet = new Set();
             data.forEach(item => {
-              const dateStr = item.REQUEST_DATE;
+              // ดึงวันที่จาก APPROVE_REQ_DATE แทน REQUEST_DATE
+              const dateStr = item.APPROVE_REQ_DATE;
               if (dateStr && dateStr.length >= 10) {
                 const parts = dateStr.split('-');
                 if (parts.length >= 3) {
@@ -302,7 +304,8 @@
             return data.filter(item => {
               if (!item['ชื่อเรื่อง'] || String(item['ชื่อเรื่อง']).trim() === '') return false;
               
-              const dateStr = item.REQUEST_DATE || '';
+              // ใช้ APPROVE_REQ_DATE ในการเปรียบเทียบตัวกรอง
+              const dateStr = item.APPROVE_REQ_DATE || '';
               let matchYear = filterYears.length === 0;
               let matchMonth = filterMonths.length === 0;
               let matchDay = filterDays.length === 0;
@@ -489,8 +492,9 @@
               const status = (item.JOB_STATUS || '').toUpperCase().trim();
               if (status === 'COMPLETED') {
                  stats[key].completed++;
-                 if (item.REQUEST_DATE && item.COMPLETION_DATE) {
-                   const start = new Date(item.REQUEST_DATE);
+                 // ใช้ APPROVE_REQ_DATE แทน REQUEST_DATE ในการหาซ่อมเฉลี่ยตามที่ร้องขอ
+                 if (item.APPROVE_REQ_DATE && item.COMPLETION_DATE) {
+                   const start = new Date(item.APPROVE_REQ_DATE);
                    const end = new Date(item.COMPLETION_DATE);
                    if (!isNaN(start) && !isNaN(end)) {
                        start.setHours(0, 0, 0, 0); end.setHours(0, 0, 0, 0);
@@ -601,7 +605,8 @@
           const cumulativeMonthlyData = useMemo(() => {
             const grouped = {};
             filteredData.forEach(item => {
-              const dateStr = item.REQUEST_DATE;
+              // ปรับกราฟสะสมรายเดือนให้ใช้วันที่อนุมัติเพื่อให้สอดคล้องกับตัวกรอง
+              const dateStr = item.APPROVE_REQ_DATE;
               if (!dateStr || dateStr.length < 7) return;
               const monthKey = dateStr.substring(0, 7); 
               if (!grouped[monthKey]) grouped[monthKey] = { month: monthKey, COMPLETED: 0, NEW: 0, 'IN PROGRESS': 0, OTHER: 0 };
@@ -706,11 +711,11 @@
                   <div className="bg-white/90 p-8 rounded-3xl shadow-2xl max-w-md w-full text-center border border-white/50 relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
                     <div className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-blue-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner ring-8 ring-indigo-50">
-                      <LucideIcon name="Sparkles" size={44} />
+                      <LucideIcon name="Wrench" size={44} />
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-800 mb-3 tracking-tight">ยินดีต้อนรับสู่ Premium Dashboard</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-3 tracking-tight">ยินดีต้อนรับสู่ VITA Factory - Maintenance Dashboard</h2>
                     <p className="text-slate-600 mb-8 leading-relaxed font-medium">
-                      กรุณาอัปโหลดไฟล์ Excel <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md">"Maintenance Job"</span> เพื่อเริ่มต้นประสบการณ์วิเคราะห์ข้อมูลเหนือระดับค่ะ
+                      กรุณาอัปโหลดไฟล์ Excel <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md">"Maintenance Job"</span> ที่ Update ข้อมูลล่าสุดกับ Sharepoint List แล้ว
                     </p>
                     <button onClick={() => setShowWelcomeModal(false)} className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-4 rounded-xl transition-all duration-300 shadow-lg shadow-indigo-200 hover:shadow-indigo-300 hover:-translate-y-0.5 active:scale-95">
                       รับทราบและดำเนินการต่อ
@@ -774,7 +779,7 @@
                 <div className="glass-card p-6 rounded-[2rem] flex flex-col md:flex-row gap-6 items-center animate-fade-in-up relative z-50" style={{animationDelay: '0.1s'}}>
                   <div className="flex items-center gap-3 text-indigo-900 font-black whitespace-nowrap bg-indigo-50/50 px-4 py-2 rounded-xl">
                     <LucideIcon name="Filter" size={20} className="text-indigo-600"/>
-                    <span>ตัวกรองอัจฉริยะ (Smart Filters)</span>
+                    <span>กรองข้อมูล (วันที่แผนกอนุมัติแจ้งซ่อม)</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 w-full">
                     <MultiSelectDropdown label="ผู้รับผิดชอบ (Assignee)" options={assignees} selected={filterAssignees} onChange={setFilterAssignees} />
