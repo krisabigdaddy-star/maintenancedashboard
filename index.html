@@ -126,6 +126,34 @@
             );
         };
 
+        // --- Sparkline Graph Component ---
+        const Sparkline = ({ data, color }) => {
+            if (!data || data.length < 2) return <div className="h-10 w-full mt-2 border-b border-dashed border-slate-200"></div>;
+            const validData = data.map(d => d === null ? 0 : d);
+            const max = Math.max(...validData) || 1;
+            const min = Math.min(...validData);
+            const range = max - min === 0 ? 1 : max - min;
+            const w = 200, h = 40;
+            
+            const points = validData.map((val, i) => {
+                const x = (i / (validData.length - 1)) * w;
+                const y = h - (((val - min) / range) * h * 0.8) - (h * 0.1); 
+                return `${x},${y}`;
+            }).join(' ');
+
+            return (
+                <svg width="100%" height="45" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-3 overflow-visible">
+                    <polyline points={points} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-40" />
+                    {validData.map((val, i) => {
+                        const x = (i / (validData.length - 1)) * w;
+                        const y = h - (((val - min) / range) * h * 0.8) - (h * 0.1);
+                        const isLast = i === validData.length - 1;
+                        return <circle key={i} cx={x} cy={y} r={isLast ? "4" : "2"} fill={isLast ? color : '#fff'} stroke={color} strokeWidth={isLast ? "2" : "1.5"} className={isLast ? "animate-pulse" : ""} />
+                    })}
+                </svg>
+            );
+        };
+
         // --- Date Parser ---
         const parseDateValue = (rawDate) => {
           if (!rawDate) return '';
@@ -338,30 +366,28 @@
 
           // --- Executive Snapshot (Trends) ---
           const trendStats = useMemo(() => {
-             if (data.length === 0) return null;
+             if (filteredData.length === 0) return null;
 
-             let maxDate = new Date(0);
-             data.forEach(d => {
-                 if(d.APPROVE_REQ_DATE) {
-                     let dt = new Date(d.APPROVE_REQ_DATE);
-                     if(!isNaN(dt) && dt > maxDate) maxDate = dt;
+             let targetYear = null, targetMonth = null;
+             if (filterYears.length === 1 && filterMonths.length === 1) {
+                 targetYear = filterYears[0];
+                 targetMonth = filterMonths[0];
+             } else {
+                 let maxDate = new Date(0);
+                 filteredData.forEach(d => {
+                     if(d.APPROVE_REQ_DATE) {
+                         let dt = new Date(d.APPROVE_REQ_DATE);
+                         if(!isNaN(dt) && dt > maxDate) maxDate = dt;
+                     }
+                 });
+                 if (maxDate.getTime() > 0) {
+                     targetYear = maxDate.getFullYear().toString();
+                     targetMonth = String(maxDate.getMonth() + 1).padStart(2, '0');
                  }
-             });
-             if (maxDate.getTime() === 0) return null;
+             }
 
-             const cmYear = maxDate.getFullYear();
-             const cmMonth = maxDate.getMonth();
-             const pmDate = new Date(cmYear, cmMonth - 1, 1);
-             const pmYear = pmDate.getFullYear();
-             const pmMonth = pmDate.getMonth();
-
-             const getMonthKey = (y, m) => `${y}-${String(m+1).padStart(2, '0')}`;
-             const cmKey = getMonthKey(cmYear, cmMonth);
-             const pmKey = getMonthKey(pmYear, pmMonth);
-
-             const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-             const cmName = `${monthNames[cmMonth]} ${String(cmYear).substring(2)}`;
-             const pmName = `${monthNames[pmMonth]} ${String(pmYear).substring(2)}`;
+             if (!targetYear || !targetMonth) return null;
+             const targetMonthKey = `${targetYear}-${targetMonth}`;
 
              let baseData = data;
              if (filterAssignees.length > 0) {
@@ -373,69 +399,106 @@
                 });
              }
 
-             const cmData = baseData.filter(d => d.APPROVE_REQ_DATE && d.APPROVE_REQ_DATE.startsWith(cmKey));
-             const pmData = baseData.filter(d => d.APPROVE_REQ_DATE && d.APPROVE_REQ_DATE.startsWith(pmKey));
+             const monthlyGroups = {};
+             baseData.forEach(item => {
+                 if (!item.APPROVE_REQ_DATE) return;
+                 const mKey = item.APPROVE_REQ_DATE.substring(0, 7);
+                 if (!monthlyGroups[mKey]) monthlyGroups[mKey] = { items: [], incoming: 0, completed: 0 };
+                 monthlyGroups[mKey].items.push(item);
+                 monthlyGroups[mKey].incoming++;
+                 
+                 if ((item.JOB_STATUS || '').toUpperCase().trim() === 'COMPLETED' && item.COMPLETION_DATE) {
+                     const compKey = item.COMPLETION_DATE.substring(0, 7);
+                     if (!monthlyGroups[compKey]) monthlyGroups[compKey] = { items: [], incoming: 0, completed: 0 };
+                     monthlyGroups[compKey].completed++;
+                 }
+             });
 
-             const calcHitRate = (ds) => {
-                 let total = 0, hit = 0;
-                 ds.forEach(item => {
-                     if(item.JOB_STATUS?.toUpperCase() === 'COMPLETED' && item.DUE_DATE && item.COMPLETION_DATE) {
-                         total++;
-                         if(new Date(item.COMPLETION_DATE) <= new Date(item.DUE_DATE)) hit++;
+             const sortedMonths = Object.keys(monthlyGroups).sort();
+             const targetIndex = sortedMonths.indexOf(targetMonthKey);
+             if (targetIndex === -1) return null;
+
+             // Take up to 6 months leading to target month for charts
+             const historyMonths = sortedMonths.slice(Math.max(0, targetIndex - 5), targetIndex + 1);
+
+             const calcMetrics = (mKey) => {
+                 const mData = monthlyGroups[mKey];
+                 if (!mData) return { sla: null, lead: null, clear: null };
+                 
+                 let slaTotal = 0, slaHit = 0, leadTotal = 0, leadCount = 0;
+                 mData.items.forEach(item => {
+                     if ((item.JOB_STATUS || '').toUpperCase().trim() === 'COMPLETED') {
+                         if (item.COMPLETION_DATE && item.DUE_DATE) {
+                             slaTotal++;
+                             if (new Date(item.COMPLETION_DATE) <= new Date(item.DUE_DATE)) slaHit++;
+                         }
+                         if (item.APPROVE_REQ_DATE && item.COMPLETION_DATE) {
+                             const s = new Date(item.APPROVE_REQ_DATE);
+                             const e = new Date(item.COMPLETION_DATE);
+                             if (!isNaN(s) && !isNaN(e)) {
+                                 const d = (e - s) / 86400000;
+                                 if (d >= 0) { leadTotal += d; leadCount++; }
+                             }
+                         }
                      }
                  });
-                 return total > 0 ? (hit/total)*100 : null; // null means no data
+                 
+                 return {
+                     month: mKey,
+                     sla: slaTotal > 0 ? (slaHit / slaTotal) * 100 : null,
+                     lead: leadCount > 0 ? leadTotal / leadCount : null,
+                     clear: mData.incoming > 0 ? (mData.completed / mData.incoming) * 100 : (mData.completed > 0 ? 100 : null)
+                 };
              };
 
-             const calcLeadTime = (ds) => {
-                 let totalDays = 0, count = 0;
-                 ds.forEach(item => {
-                      if(item.JOB_STATUS?.toUpperCase() === 'COMPLETED' && item.APPROVE_REQ_DATE && item.COMPLETION_DATE) {
-                          const s = new Date(item.APPROVE_REQ_DATE);
-                          const e = new Date(item.COMPLETION_DATE);
-                          if(!isNaN(s) && !isNaN(e)) {
-                              const d = (e-s)/86400000;
-                              if(d>=0) { totalDays += d; count++; }
-                          }
-                      }
-                 });
-                 return count > 0 ? totalDays/count : null;
-             };
+             const historyData = historyMonths.map(calcMetrics);
+             const currentData = historyData[historyData.length - 1];
+             const prevData = historyData.length > 1 ? historyData[historyData.length - 2] : null;
 
-             const calcClearance = (monthStr) => {
-                  const incoming = baseData.filter(d => d.APPROVE_REQ_DATE?.startsWith(monthStr)).length;
-                  const completed = baseData.filter(d => d.COMPLETION_DATE?.startsWith(monthStr) && d.JOB_STATUS?.toUpperCase() === 'COMPLETED').length;
-                  return { incoming, completed, rate: incoming > 0 ? (completed/incoming)*100 : (completed > 0 ? 100 : null) };
-             };
+             const counts = {};
+             monthlyGroups[targetMonthKey].items.forEach(d => {
+                  if((d.JOB_STATUS || '').toUpperCase().trim() === 'COMPLETED' && d.ASSIGNED_TO) {
+                      const names = d.ASSIGNED_TO.split(',').map(n=>n.trim());
+                      names.forEach(n => {
+                          if(n && n !== '-' && n !== 'N/A') counts[n] = (counts[n] || 0) + 1;
+                      });
+                  }
+             });
+             let topCloser = { name: '-', count: 0 };
+             Object.entries(counts).forEach(([n, c]) => { if(c > topCloser.count) topCloser = { name: n, count: c }; });
 
-             const getTopCloser = (ds) => {
-                 const counts = {};
-                 ds.forEach(d => {
-                      if(d.JOB_STATUS?.toUpperCase() === 'COMPLETED' && d.ASSIGNED_TO) {
-                          const names = d.ASSIGNED_TO.split(',').map(n=>n.trim());
-                          names.forEach(n => {
-                              if(n && n !== '-' && n !== 'N/A') counts[n] = (counts[n] || 0) + 1;
-                          });
-                      }
-                 });
-                 let top = { name: '-', count: 0 };
-                 Object.entries(counts).forEach(([n, c]) => { if(c > top.count) top = { name: n, count: c }; });
-                 return top;
+             const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+             const formatM = (k) => {
+                 const [y, m] = k.split('-');
+                 return `${monthNames[parseInt(m)-1]} ${y.substring(2)}`;
              };
-
-             const cmSLA = calcHitRate(cmData); const pmSLA = calcHitRate(pmData);
-             const cmLead = calcLeadTime(cmData); const pmLead = calcLeadTime(pmData);
-             const cmClear = calcClearance(cmKey); const pmClear = calcClearance(pmKey);
-             const topCloser = getTopCloser(cmData);
 
              return {
-                 cmName, pmName,
-                 sla: { val: cmSLA, prev: pmSLA, diff: (cmSLA !== null && pmSLA !== null) ? cmSLA - pmSLA : null, better: (cmSLA - pmSLA) >= 0 },
-                 lead: { val: cmLead, prev: pmLead, diff: (cmLead !== null && pmLead !== null) ? cmLead - pmLead : null, better: (cmLead - pmLead) <= 0 }, // less lead is better
-                 clear: { val: cmClear.rate, prev: pmClear.rate, diff: (cmClear.rate !== null && pmClear.rate !== null) ? cmClear.rate - pmClear.rate : null, better: (cmClear.rate - pmClear.rate) >= 0 },
+                 cmName: formatM(targetMonthKey),
+                 pmName: prevData ? formatM(prevData.month) : '-',
+                 sla: { 
+                    val: currentData.sla, prev: prevData ? prevData.sla : null, 
+                    diff: (currentData.sla !== null && prevData && prevData.sla !== null) ? currentData.sla - prevData.sla : null, 
+                    better: (currentData.sla !== null && prevData && prevData.sla !== null) ? currentData.sla >= prevData.sla : true,
+                    history: historyData.map(d => d.sla)
+                 },
+                 lead: { 
+                    val: currentData.lead, prev: prevData ? prevData.lead : null, 
+                    diff: (currentData.lead !== null && prevData && prevData.lead !== null) ? currentData.lead - prevData.lead : null, 
+                    better: (currentData.lead !== null && prevData && prevData.lead !== null) ? currentData.lead <= prevData.lead : true,
+                    history: historyData.map(d => d.lead)
+                 },
+                 clear: { 
+                    val: currentData.clear, prev: prevData ? prevData.clear : null, 
+                    diff: (currentData.clear !== null && prevData && prevData.clear !== null) ? currentData.clear - prevData.clear : null, 
+                    better: (currentData.clear !== null && prevData && prevData.clear !== null) ? currentData.clear >= prevData.clear : true,
+                    history: historyData.map(d => d.clear),
+                    incoming: monthlyGroups[targetMonthKey].incoming,
+                    completed: monthlyGroups[targetMonthKey].completed
+                 },
                  topCloser
              };
-          }, [data, filterAssignees]);
+          }, [data, filterAssignees, filterYears, filterMonths, filteredData]);
 
           // --- General KPIs ---
           const kpis = useMemo(() => {
@@ -791,6 +854,7 @@
             return { workers: sorted, maxTotal };
           }, [filteredData]);
 
+          // --- New List Arrays (Fixed Error) ---
           const latestJobs = useMemo(() => {
             return [...filteredData].sort((a, b) => {
               const timeA = a.APPROVE_REQ_DATE ? new Date(a.APPROVE_REQ_DATE).getTime() : 0;
@@ -960,87 +1024,86 @@
                   <h2 className="section-title section-title-1 text-2xl font-black text-slate-800 tracking-tight">
                     <LucideIcon name="Sparkles" className="text-amber-500" size={28} /> สรุปภาพรวมรายเดือน (Executive Snapshot)
                   </h2>
-                  <p className="text-sm font-medium text-slate-500 mb-6 pl-10">เทียบข้อมูลเดือนล่าสุด <span className="font-bold text-indigo-600">[{trendStats.cmName}]</span> กับเดือนก่อนหน้า <span className="font-bold text-slate-600">[{trendStats.pmName}]</span> ในชุดข้อมูลทั้งหมด</p>
+                  <p className="text-sm font-medium text-slate-500 mb-6 pl-10">เทียบข้อมูลเดือน <span className="font-bold text-indigo-600">[{trendStats.cmName}]</span> กับเดือน <span className="font-bold text-slate-600">[{trendStats.pmName}]</span> ตามเงื่อนไขที่คุณกรอง</p>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                      {/* 1. SLA Trend */}
-                     <div className="glass-card p-6 rounded-3xl relative overflow-hidden group">
-                        <div className="flex justify-between items-start mb-4">
-                           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><LucideIcon name="Target" size={24} /></div>
-                           {trendStats.sla.diff !== null && (
-                             <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${trendStats.sla.better ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                               <LucideIcon name={trendStats.sla.better ? 'TrendingUp' : 'TrendingDown'} size={14} />
-                               {trendStats.sla.diff > 0 ? '+' : ''}{trendStats.sla.diff.toFixed(1)}%
-                             </div>
-                           )}
-                           {trendStats.sla.diff === null && <div className="text-slate-300"><LucideIcon name="Minus" size={20} /></div>}
+                     <div className="glass-card p-6 rounded-3xl relative overflow-hidden group flex flex-col justify-between">
+                        <div>
+                          <div className="flex justify-between items-start mb-4">
+                             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><LucideIcon name="Target" size={24} /></div>
+                             {trendStats.sla.diff !== null && (
+                               <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${trendStats.sla.better ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                 <LucideIcon name={trendStats.sla.better ? 'TrendingUp' : 'TrendingDown'} size={14} />
+                                 {trendStats.sla.diff > 0 ? '+' : ''}{trendStats.sla.diff.toFixed(1)}%
+                               </div>
+                             )}
+                             {trendStats.sla.diff === null && <div className="text-slate-300"><LucideIcon name="Minus" size={20} /></div>}
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">ส่งงานตรงเวลา (SLA)</h4>
+                          <div className="flex items-baseline gap-2">
+                             <span className="text-4xl font-black text-slate-800">{trendStats.sla.val !== null ? trendStats.sla.val.toFixed(0) : '-'}</span>
+                             {trendStats.sla.val !== null && <span className="text-lg font-bold text-slate-400">%</span>}
+                          </div>
                         </div>
-                        <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">ส่งงานตรงเวลา (SLA)</h4>
-                        <div className="flex items-baseline gap-2">
-                           <span className="text-4xl font-black text-slate-800">{trendStats.sla.val !== null ? trendStats.sla.val.toFixed(0) : '-'}</span>
-                           {trendStats.sla.val !== null && <span className="text-lg font-bold text-slate-400">%</span>}
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-slate-100 text-xs font-medium text-slate-500">
-                           เดือนก่อน: <span className="font-bold text-slate-700">{trendStats.sla.prev !== null ? trendStats.sla.prev.toFixed(0) + '%' : '-'}</span>
-                        </div>
+                        <Sparkline data={trendStats.sla.history} color="#10b981" />
                      </div>
 
                      {/* 2. Lead Time Trend */}
-                     <div className="glass-card p-6 rounded-3xl relative overflow-hidden group">
-                        <div className="flex justify-between items-start mb-4">
-                           <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><LucideIcon name="Timer" size={24} /></div>
-                           {trendStats.lead.diff !== null && (
-                             <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${trendStats.lead.better ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                               <LucideIcon name={trendStats.lead.better ? 'TrendingDown' : 'TrendingUp'} size={14} />
-                               {trendStats.lead.diff > 0 ? '+' : ''}{trendStats.lead.diff.toFixed(1)} วัน
-                             </div>
-                           )}
-                           {trendStats.lead.diff === null && <div className="text-slate-300"><LucideIcon name="Minus" size={20} /></div>}
+                     <div className="glass-card p-6 rounded-3xl relative overflow-hidden group flex flex-col justify-between">
+                        <div>
+                          <div className="flex justify-between items-start mb-4">
+                             <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><LucideIcon name="Timer" size={24} /></div>
+                             {trendStats.lead.diff !== null && (
+                               <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${trendStats.lead.better ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                 <LucideIcon name={trendStats.lead.better ? 'TrendingDown' : 'TrendingUp'} size={14} />
+                                 {trendStats.lead.diff > 0 ? '+' : ''}{trendStats.lead.diff.toFixed(1)} วัน
+                               </div>
+                             )}
+                             {trendStats.lead.diff === null && <div className="text-slate-300"><LucideIcon name="Minus" size={20} /></div>}
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">ระยะเวลาซ่อมเฉลี่ย</h4>
+                          <div className="flex items-baseline gap-2">
+                             <span className="text-4xl font-black text-slate-800">{trendStats.lead.val !== null ? trendStats.lead.val.toFixed(1) : '-'}</span>
+                             {trendStats.lead.val !== null && <span className="text-lg font-bold text-slate-400">วัน</span>}
+                          </div>
                         </div>
-                        <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">ระยะเวลาซ่อมเฉลี่ย</h4>
-                        <div className="flex items-baseline gap-2">
-                           <span className="text-4xl font-black text-slate-800">{trendStats.lead.val !== null ? trendStats.lead.val.toFixed(1) : '-'}</span>
-                           {trendStats.lead.val !== null && <span className="text-lg font-bold text-slate-400">วัน</span>}
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-slate-100 text-xs font-medium text-slate-500">
-                           เดือนก่อน: <span className="font-bold text-slate-700">{trendStats.lead.prev !== null ? trendStats.lead.prev.toFixed(1) + ' วัน' : '-'}</span>
-                        </div>
+                        <Sparkline data={trendStats.lead.history} color="#3b82f6" />
                      </div>
 
                      {/* 3. Clearance Rate Trend */}
-                     <div className="glass-card p-6 rounded-3xl relative overflow-hidden group">
-                        <div className="flex justify-between items-start mb-4">
-                           <div className="p-3 bg-amber-50 text-amber-600 rounded-xl"><LucideIcon name="CheckCircle" size={24} /></div>
-                           {trendStats.clear.diff !== null && (
-                             <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${trendStats.clear.better ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                               <LucideIcon name={trendStats.clear.better ? 'TrendingUp' : 'TrendingDown'} size={14} />
-                               {trendStats.clear.diff > 0 ? '+' : ''}{trendStats.clear.diff.toFixed(0)}%
-                             </div>
-                           )}
-                           {trendStats.clear.diff === null && <div className="text-slate-300"><LucideIcon name="Minus" size={20} /></div>}
+                     <div className="glass-card p-6 rounded-3xl relative overflow-hidden group flex flex-col justify-between">
+                        <div>
+                          <div className="flex justify-between items-start mb-4">
+                             <div className="p-3 bg-amber-50 text-amber-600 rounded-xl"><LucideIcon name="CheckCircle" size={24} /></div>
+                             {trendStats.clear.diff !== null && (
+                               <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${trendStats.clear.better ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                 <LucideIcon name={trendStats.clear.better ? 'TrendingUp' : 'TrendingDown'} size={14} />
+                                 {trendStats.clear.diff > 0 ? '+' : ''}{trendStats.clear.diff.toFixed(0)}%
+                               </div>
+                             )}
+                             {trendStats.clear.diff === null && <div className="text-slate-300"><LucideIcon name="Minus" size={20} /></div>}
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">อัตราการสะสางงาน</h4>
+                          <div className="flex items-baseline gap-2">
+                             <span className="text-4xl font-black text-slate-800">{trendStats.clear.val !== null ? trendStats.clear.val.toFixed(0) : '-'}</span>
+                             {trendStats.clear.val !== null && <span className="text-lg font-bold text-slate-400">%</span>}
+                          </div>
                         </div>
-                        <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">อัตราการสะสางงาน</h4>
-                        <div className="flex items-baseline gap-2">
-                           <span className="text-4xl font-black text-slate-800">{trendStats.clear.val !== null ? trendStats.clear.val.toFixed(0) : '-'}</span>
-                           {trendStats.clear.val !== null && <span className="text-lg font-bold text-slate-400">%</span>}
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between text-[11px] font-medium text-slate-500">
-                           <span>เข้า: <span className="font-bold text-rose-500">{trendStats.clear.incoming}</span></span>
-                           <span>เสร็จ: <span className="font-bold text-emerald-600">{trendStats.clear.completed}</span></span>
-                        </div>
+                        <Sparkline data={trendStats.clear.history} color="#f59e0b" />
                      </div>
 
                      {/* 4. Top Closer */}
-                     <div className="glass-card p-6 rounded-3xl relative overflow-hidden group bg-gradient-to-br from-indigo-900 to-slate-900 border-none">
+                     <div className="glass-card p-6 rounded-3xl relative overflow-hidden group bg-gradient-to-br from-indigo-900 to-slate-900 border-none flex flex-col justify-center">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
                         <div className="flex justify-between items-start mb-4 relative z-10">
                            <div className="p-3 bg-white/10 text-amber-400 rounded-xl backdrop-blur-sm border border-white/10"><LucideIcon name="Trophy" size={24} /></div>
                            <div className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/10 text-white border border-white/20 uppercase tracking-widest">Top Closer</div>
                         </div>
-                        <h4 className="text-sm font-bold text-indigo-200 uppercase tracking-widest mb-1 relative z-10">ผู้ปิดงานได้มากที่สุด</h4>
-                        <div className="flex flex-col gap-1 relative z-10">
+                        <h4 className="text-sm font-bold text-indigo-200 uppercase tracking-widest mb-1 relative z-10">ผู้ปิดงานได้มากที่สุด ({trendStats.cmName})</h4>
+                        <div className="flex flex-col gap-1 relative z-10 mt-2">
                            <span className="text-2xl font-black text-white truncate" title={trendStats.topCloser.name}>{trendStats.topCloser.name}</span>
-                           <span className="text-sm font-bold text-indigo-300">{trendStats.topCloser.count} งานที่ปิดจบได้</span>
+                           <span className="text-sm font-bold text-emerald-400">{trendStats.topCloser.count} งานที่ปิดจบได้</span>
                         </div>
                      </div>
                   </div>
