@@ -47,7 +47,8 @@
                 PieChart: '<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',
                 TrendingUp: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
                 Timer: '<line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/>',
-                Users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'
+                Users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+                ShieldCheck: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} dangerouslySetInnerHTML={{__html: paths[name]}} />
@@ -146,24 +147,15 @@
           );
         };
 
-        // --- Mock Initial Data ---
-        const mockData = [
-          { ชื่อเรื่อง: 'B082-2026-00020', REQUEST_DATE: '2026-01-15', ASSIGNED_DATE: '2026-01-16', DUE_DATE: '2026-01-25', COMPLETION_DATE: '2026-01-20', REQUESTER_DEPT: 'VGD/S', JOB_DESCRIPTION: 'ตู้เก็บสายฉีดน้ำดับเพลิง กระจกตู้แตก', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'MEDIUM', Plan_Working_Day: '3' },
-          { ชื่อเรื่อง: 'B082-2026-00167', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '', DUE_DATE: '2026-04-10', COMPLETION_DATE: '', REQUESTER_DEPT: 'VCP/E', JOB_DESCRIPTION: 'เครื่องปรับอากาศห้อง server คอยล์เย็นรั่ว', JOB_STATUS: 'NEW', JOB_TYPE: 'CM', PRIORITY: 'HIGH', Plan_Working_Day: '2' },
-          { ชื่อเรื่อง: 'B082-2026-00164', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '2026-04-03', DUE_DATE: '2026-04-05', COMPLETION_DATE: '2026-04-06', REQUESTER_DEPT: 'VCP/W', JOB_DESCRIPTION: 'พบพื้น บริเวณประตูรับสินค้า ชำรุด', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'MEDIUM', Plan_Working_Day: '5' },
-          { ชื่อเรื่อง: 'B082-2026-00165', REQUEST_DATE: '2026-04-02', ASSIGNED_DATE: '2026-04-02', DUE_DATE: '2026-04-08', COMPLETION_DATE: '', REQUESTER_DEPT: 'VCP/W', JOB_DESCRIPTION: 'พบสนิมบริเวณหลังคา รบกวนซ่อมแซม', JOB_STATUS: 'IN PROGRESS', JOB_TYPE: 'PM', PRIORITY: 'LOW', Plan_Working_Day: '4' },
-          { ชื่อเรื่อง: 'B082-2026-00050', REQUEST_DATE: '2026-02-10', ASSIGNED_DATE: '2026-02-10', DUE_DATE: '2026-02-11', COMPLETION_DATE: '2026-02-11', REQUESTER_DEPT: 'VGD/S', JOB_DESCRIPTION: 'เปลี่ยนหลอดไฟทางเดิน', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'CM', PRIORITY: 'LOW', Plan_Working_Day: '1' },
-          { ชื่อเรื่อง: 'B082-2026-00080', REQUEST_DATE: '2026-03-05', ASSIGNED_DATE: '2026-03-06', DUE_DATE: '2026-03-06', COMPLETION_DATE: '2026-03-07', REQUESTER_DEPT: 'VCP/E', JOB_DESCRIPTION: 'ตรวจเช็คระบบไฟประจำเดือน', JOB_STATUS: 'COMPLETED', JOB_TYPE: 'PM', PRIORITY: 'MEDIUM', Plan_Working_Day: '2' },
-        ];
-
         function App() {
-          // ล้าง Mock Data เริ่มต้นเป็นอาร์เรย์ว่างทั้งหมด
           const [data, setData] = useState([]);
           const [fileName, setFileName] = useState('ยังไม่มีข้อมูล (กรุณาอัปโหลดไฟล์)');
           const [isXlsxLoaded, setIsXlsxLoaded] = useState(true); 
           const [errorMsg, setErrorMsg] = useState('');
           
-          // State สำหรับ Dialogs
+          // State สำหรับ Standard Durations (ใช้ค่า Default ไปก่อน เผื่อไม่มี Sheet นี้)
+          const [stdDurations, setStdDurations] = useState({ CRITICAL: 2, HIGH: 5, MEDIUM: 14, LOW: 30 });
+          
           const [showWelcomeModal, setShowWelcomeModal] = useState(true);
           const [uploadSuccessCount, setUploadSuccessCount] = useState(null);
           
@@ -185,12 +177,37 @@
                 try {
                   const fileData = new Uint8Array(event.target.result);
                   const workbook = window.XLSX.read(fileData, { type: 'array', cellDates: true });
+                  
+                  // 1. อ่านข้อมูลหลัก (จาก Sheet แรกเสมอ)
                   const firstSheetName = workbook.SheetNames[0];
                   const worksheet = workbook.Sheets[firstSheetName];
                   const parsedData = window.XLSX.utils.sheet_to_json(worksheet, { raw: true, defval: '' });
                   
-                  if (parsedData.length > 0) {
-                    const cleanedData = parsedData.map(row => ({ 
+                  // --- FIX: กรองข้อมูลบรรทัดว่างทิ้งตั้งแต่เนิ่นๆ เพื่อให้ยอด Upload Success ตรงกับรายงาน ---
+                  const validData = parsedData.filter(row => row['ชื่อเรื่อง'] && String(row['ชื่อเรื่อง']).trim() !== '');
+
+                  // 2. ค้นหาและอ่านข้อมูล Standard Duration (ถ้ามี)
+                  const stdSheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('standard'));
+                  let newStdDurMap = { ...stdDurations }; // ใช้ Default ตั้งต้น
+                  if (stdSheetName) {
+                      const stdData = window.XLSX.utils.sheet_to_json(workbook.Sheets[stdSheetName]);
+                      stdData.forEach(row => {
+                          const prioKey = Object.keys(row).find(k => k.toLowerCase().includes('priority'));
+                          const valKey = Object.keys(row).find(k => k.toLowerCase().includes('duration') || k.toLowerCase().includes('std') || k.toLowerCase().includes('day'));
+                          
+                          if (prioKey && valKey && row[prioKey]) {
+                              const pVal = String(row[prioKey]).toUpperCase().trim();
+                              const dVal = parseFloat(row[valKey]);
+                              if (!isNaN(dVal)) {
+                                  newStdDurMap[pVal] = dVal;
+                              }
+                          }
+                      });
+                      setStdDurations(newStdDurMap);
+                  }
+                  
+                  if (validData.length > 0) {
+                    const cleanedData = validData.map(row => ({ 
                         ...row, 
                         REQUEST_DATE: parseDateValue(row.REQUEST_DATE || row['วันที่แจ้ง']),
                         ASSIGNED_DATE: parseDateValue(row.ASSIGNED_DATE || row['วันที่จ่ายงาน']),
@@ -198,13 +215,11 @@
                         COMPLETION_DATE: parseDateValue(row.COMPLETION_DATE || row['วันที่แล้วเสร็จ'])
                     }));
                     
-                    // อัปเดตข้อมูลเข้าระบบ
                     setData(cleanedData);
                     setFilterYears([]); setFilterMonths([]); setFilterDays([]);
                     
-                    // ปิด Welcome Modal และเปิด Success Modal แทน
                     setShowWelcomeModal(false);
-                    setUploadSuccessCount(cleanedData.length);
+                    setUploadSuccessCount(cleanedData.length); // ตรงนี้จะโชว์ 117 เท่ากับหน้า Dashboard แล้วค่ะ
                   } else {
                     setErrorMsg('ไม่พบข้อมูลในไฟล์ หรือรูปแบบไฟล์ไม่ถูกต้อง');
                   }
@@ -281,7 +296,6 @@
             let totalRepairTime = 0, repairCount = 0;
             let noSlaDataCount = 0; 
             
-            // For Overdue calculation
             let activeOverdueCount = 0, activeOnTrackCount = 0, activeNoDueCount = 0, activeTotalWithDue = 0;
             const today = new Date();
             today.setHours(0,0,0,0);
@@ -290,7 +304,6 @@
               const status = (item.JOB_STATUS || '').toUpperCase().trim();
               
               if (status === 'COMPLETED') {
-                // 1. SLA Compliance (Completion vs Due)
                 if (item.COMPLETION_DATE && item.DUE_DATE) {
                   const comp = new Date(item.COMPLETION_DATE);
                   const due = new Date(item.DUE_DATE);
@@ -305,7 +318,6 @@
                   noSlaDataCount++; 
                 }
 
-                // 2. Pending/Assign Time (Assigned vs Request)
                 if (item.REQUEST_DATE && item.ASSIGNED_DATE) {
                   const req = new Date(item.REQUEST_DATE);
                   const ass = new Date(item.ASSIGNED_DATE);
@@ -315,7 +327,6 @@
                     if (diff >= 0 && diff < 3650) { totalAssignDelay += diff; assignCount++; }
                   }
                 }
-                // 3. Repair Time (Completion vs Assigned)
                 if (item.ASSIGNED_DATE && item.COMPLETION_DATE) {
                   const ass = new Date(item.ASSIGNED_DATE);
                   const comp = new Date(item.COMPLETION_DATE);
@@ -326,7 +337,6 @@
                   }
                 }
               } else if (status !== 'CANCELLED') {
-                 // Active Jobs (Not completed & Not cancelled)
                  if (item.DUE_DATE) {
                      const due = new Date(item.DUE_DATE);
                      if (!isNaN(due.getTime())) {
@@ -400,6 +410,109 @@
 
           const maxDeptCount = deptData.length > 0 ? Math.max(...deptData.map(d => d.count)) : 1;
 
+          // --- Priority Data Stats Calculation ---
+          const priorityDataStats = useMemo(() => {
+            const stats = {
+              CRITICAL: { label: 'CRITICAL (วิกฤต)', total: 0, uncompleted: 0, completed: 0, totalDays: 0, 
+                          styles: { bg: 'bg-purple-50/50', border: 'border-purple-100', text: 'text-purple-700', icon: 'text-purple-500' } },
+              HIGH: { label: 'HIGH (สูง)', total: 0, uncompleted: 0, completed: 0, totalDays: 0, 
+                      styles: { bg: 'bg-rose-50/50', border: 'border-rose-100', text: 'text-rose-700', icon: 'text-rose-500' } },
+              MEDIUM: { label: 'MEDIUM (ปานกลาง)', total: 0, uncompleted: 0, completed: 0, totalDays: 0, 
+                        styles: { bg: 'bg-amber-50/50', border: 'border-amber-100', text: 'text-amber-700', icon: 'text-amber-500' } },
+              LOW: { label: 'LOW (ต่ำ)', total: 0, uncompleted: 0, completed: 0, totalDays: 0, 
+                     styles: { bg: 'bg-emerald-50/50', border: 'border-emerald-100', text: 'text-emerald-700', icon: 'text-emerald-500' } },
+              UNSPECIFIED: { label: 'ไม่ระบุ', total: 0, uncompleted: 0, completed: 0, totalDays: 0, 
+                             styles: { bg: 'bg-slate-50/50', border: 'border-slate-100', text: 'text-slate-700', icon: 'text-slate-500' } }
+            };
+
+            filteredData.forEach(item => {
+              if (!item['ชื่อเรื่อง'] || String(item['ชื่อเรื่อง']).trim() === '') return;
+
+              let prio = (item.PRIORITY || '').toUpperCase().trim();
+              let key = 'UNSPECIFIED';
+              if (prio.includes('CRITICAL')) key = 'CRITICAL';
+              else if (prio.includes('HIGH')) key = 'HIGH';
+              else if (prio.includes('MEDIUM')) key = 'MEDIUM';
+              else if (prio.includes('LOW')) key = 'LOW';
+
+              stats[key].total++;
+
+              const status = (item.JOB_STATUS || '').toUpperCase().trim();
+              if (status === 'COMPLETED') {
+                 stats[key].completed++;
+                 if (item.REQUEST_DATE && item.COMPLETION_DATE) {
+                   const start = new Date(item.REQUEST_DATE);
+                   const end = new Date(item.COMPLETION_DATE);
+                   if (!isNaN(start) && !isNaN(end)) {
+                       start.setHours(0, 0, 0, 0); end.setHours(0, 0, 0, 0);
+                       const diffDays = (end - start) / 86400000;
+                       if (diffDays >= 0 && diffDays <= 3650) {
+                         stats[key].totalDays += diffDays;
+                       }
+                   }
+                 }
+              } else if (!status.includes('CANCEL')) {
+                 stats[key].uncompleted++;
+              }
+            });
+
+            return Object.values(stats).filter(s => s.total > 0).map(s => ({
+              ...s,
+              avgDays: s.completed > 0 ? (s.totalDays / s.completed).toFixed(1) : 0
+            })).sort((a,b) => b.total - a.total);
+          }, [filteredData]);
+
+          // --- Standard Duration Compliance Calculation ---
+          const stdComplianceStats = useMemo(() => {
+            const stats = {
+              CRITICAL: { label: 'CRITICAL', stdDays: stdDurations.CRITICAL || 2, total: 0, passed: 0, failed: 0, colors: { text: 'text-purple-700', bg: 'bg-purple-50', bar: 'bg-purple-500', border: 'border-purple-200' } },
+              HIGH: { label: 'HIGH', stdDays: stdDurations.HIGH || 5, total: 0, passed: 0, failed: 0, colors: { text: 'text-rose-700', bg: 'bg-rose-50', bar: 'bg-rose-500', border: 'border-rose-200' } },
+              MEDIUM: { label: 'MEDIUM', stdDays: stdDurations.MEDIUM || 14, total: 0, passed: 0, failed: 0, colors: { text: 'text-amber-700', bg: 'bg-amber-50', bar: 'bg-amber-500', border: 'border-amber-200' } },
+              LOW: { label: 'LOW', stdDays: stdDurations.LOW || 30, total: 0, passed: 0, failed: 0, colors: { text: 'text-emerald-700', bg: 'bg-emerald-50', bar: 'bg-emerald-500', border: 'border-emerald-200' } },
+            };
+
+            filteredData.forEach(item => {
+              if (!item['ชื่อเรื่อง'] || String(item['ชื่อเรื่อง']).trim() === '') return;
+              
+              const status = (item.JOB_STATUS || '').toUpperCase().trim();
+              if (status !== 'COMPLETED') return; // วิเคราะห์เฉพาะงานที่ทำเสร็จแล้ว
+
+              let prio = (item.PRIORITY || '').toUpperCase().trim();
+              let key = null;
+              if (prio.includes('CRITICAL')) key = 'CRITICAL';
+              else if (prio.includes('HIGH')) key = 'HIGH';
+              else if (prio.includes('MEDIUM')) key = 'MEDIUM';
+              else if (prio.includes('LOW')) key = 'LOW';
+
+              if (!key) return;
+
+              const reqDate = item.REQUEST_DATE;
+              const compDate = item.COMPLETION_DATE;
+              
+              if (reqDate && compDate) {
+                  const start = new Date(reqDate);
+                  const end = new Date(compDate);
+                  if (!isNaN(start) && !isNaN(end)) {
+                      start.setHours(0,0,0,0); end.setHours(0,0,0,0);
+                      const diffDays = (end - start) / 86400000;
+                      if (diffDays >= 0 && diffDays <= 3650) {
+                          stats[key].total++;
+                          if (diffDays <= stats[key].stdDays) {
+                              stats[key].passed++;
+                          } else {
+                              stats[key].failed++;
+                          }
+                      }
+                  }
+              }
+            });
+
+            return Object.values(stats).map(s => ({
+                ...s,
+                passRate: s.total > 0 ? (s.passed / s.total) * 100 : 0
+            }));
+          }, [filteredData, stdDurations]);
+
           // --- Unified Worker Data Calculation ---
           const workerCombinedData = useMemo(() => {
             const stats = {};
@@ -421,7 +534,6 @@
               let mainNames = assignedTo ? assignedTo.split(',').map(n => n.trim()).filter(n => n && n !== '-' && n.toUpperCase() !== 'N/A') : [];
               let coNames = coAssignedTo ? coAssignedTo.split(',').map(n => n.trim()).filter(n => n && n !== '-' && n.toUpperCase() !== 'N/A') : [];
 
-              // ดักจับงานที่ไม่มีการมอบหมายให้ใครเลย
               if (mainNames.length === 0 && coNames.length === 0) {
                 mainNames = ["ยังไม่มอบหมาย (Unassigned)"];
               }
@@ -471,17 +583,15 @@
 
             const workers = Object.values(stats);
             
-            // For Workload Card: Sort by grandTotal
             const workloadWorkers = [...workers].sort((a, b) => b.grandTotal - a.grandTotal);
             const maxWorkload = workloadWorkers.length > 0 ? workloadWorkers[0].grandTotal : 1;
             workloadWorkers.forEach(w => {
                w.pct = validTotalJobs > 0 ? (w.grandTotal / validTotalJobs) * 100 : 0;
             });
 
-            // For Table: Sort by active total (งานค้าง)
             const tableWorkers = [...workers].sort((a, b) => {
                if (b.activeTotal !== a.activeTotal) return b.activeTotal - a.activeTotal;
-               return b.grandTotal - a.grandTotal; // Tie breaker
+               return b.grandTotal - a.grandTotal; 
             });
 
             return {
@@ -498,7 +608,7 @@
             filteredData.forEach(item => {
               const dateStr = item.REQUEST_DATE;
               if (!dateStr || dateStr.length < 7) return;
-              const monthKey = dateStr.substring(0, 7); // YYYY-MM
+              const monthKey = dateStr.substring(0, 7); 
               if (!grouped[monthKey]) grouped[monthKey] = { month: monthKey, COMPLETED: 0, NEW: 0, 'IN PROGRESS': 0, OTHER: 0 };
 
               const status = (item.JOB_STATUS || '').toUpperCase().trim();
@@ -540,7 +650,7 @@
             ? cumulativeMonthlyData[cumulativeMonthlyData.length - 1].total 
             : 1;
 
-          // --- Worker Performance Data Calculation (Replaced Overdue Data) ---
+          // --- Worker Performance Data Calculation ---
           const workerPerformanceData = useMemo(() => {
             const stats = {};
             const today = new Date();
@@ -559,11 +669,9 @@
               let isCompletedOnTime = false;
               let isActiveOnTrack = false;
 
-              // 1. เช็คงานที่ถูกยกเลิก
               if (status.includes('CANCEL')) {
                 isCancelled = true;
               } 
-              // 2. เช็คว่ามี Due Date หรือไม่
               else if (!dueDateStr) {
                 isNoDueDate = true;
               } 
@@ -583,13 +691,12 @@
                         if (comp > due) isCompletedOverdue = true;
                         else isCompletedOnTime = true;
                       } else {
-                        isNoDueDate = true; // มี Due แต่ไม่มีวันเสร็จ ทำให้ประเมินตรงเวลาไม่ได้
+                        isNoDueDate = true; 
                       }
                     } else {
-                      isNoDueDate = true; // มี Due แต่ไม่มีวันเสร็จ
+                      isNoDueDate = true; 
                     }
                   } else {
-                    // งานยังไม่เสร็จ เทียบกับวันที่ปัจจุบัน
                     if (today > due) isActiveOverdue = true;
                     else isActiveOnTrack = true;
                   }
@@ -599,7 +706,6 @@
               const assignedTo = item.ASSIGNED_TO ? String(item.ASSIGNED_TO).trim() : '';
               let names = assignedTo ? assignedTo.split(',').map(n => n.trim()).filter(n => n && n !== '-' && n.toUpperCase() !== 'N/A') : [];
               
-              // ดักจับงานที่ไม่มีคนรับผิดชอบหลัก
               if (names.length === 0) {
                   names = ["ยังไม่มอบหมาย (Unassigned)"];
               }
@@ -614,8 +720,8 @@
                      activeOnTrack: 0, 
                      noDueDate: 0,
                      cancelled: 0,
-                     totalMeasurable: 0, // สำหรับหาร %
-                     grandTotal: 0       // สำหรับสร้างแท่งยาว
+                     totalMeasurable: 0, 
+                     grandTotal: 0       
                    };
                  }
                  
@@ -630,7 +736,6 @@
               });
             });
 
-            // เรียงลำดับคนที่มีงานล่าช้าเยอะสุดขึ้นก่อน ถ้ายอดล่าช้าเท่ากันให้ดูที่ยอดงานรวมทั้งหมด
             const sorted = Object.values(stats).sort((a, b) => {
               const bOverdue = b.activeOverdue + b.completedOverdue;
               const aOverdue = a.activeOverdue + a.completedOverdue;
@@ -656,8 +761,6 @@
             <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 md:p-8 relative">
               
               {/* --- Modal Dialogs --- */}
-              
-              {/* 1. Welcome Modal */}
               {showWelcomeModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
                   <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center transform transition-all">
@@ -678,7 +781,6 @@
                 </div>
               )}
 
-              {/* 2. Success Modal */}
               {uploadSuccessCount !== null && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
                   <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center transform transition-all">
@@ -700,7 +802,6 @@
                   </div>
                 </div>
               )}
-
               {/* --- End Modal Dialogs --- */}
 
               {/* Header */}
@@ -774,7 +875,7 @@
                 </h2>
                 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* 1. SLA Hit Rate (Completed Jobs Only) */}
+                  {/* 1. SLA Hit Rate */}
                   <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center justify-center relative">
                     <div className="flex w-full items-center gap-2 mb-4">
                       <LucideIcon name="Target" size={20} className="text-indigo-500" />
@@ -829,7 +930,6 @@
                       </div>
                     </div>
 
-                    {/* Footnote for missing data */}
                     {efficiencyData.noSlaDataCount > 0 && (
                       <p className="text-[10px] text-amber-600 mt-4 text-center w-full bg-amber-50 py-1.5 rounded">
                         * มีงาน Completed {efficiencyData.noSlaDataCount} งาน ที่ไม่ได้ระบุวันที่เสร็จ/กำหนดเสร็จ จึงไม่นำมารวมในกราฟนี้
@@ -837,7 +937,7 @@
                     )}
                   </div>
 
-                  {/* 2. Active Jobs Overdue Status (Uncompleted Jobs vs Today) */}
+                  {/* 2. Active Jobs Overdue Status */}
                   <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col items-center justify-center">
                     <div className="flex w-full items-center gap-2 mb-4">
                       <LucideIcon name="AlertTriangle" size={20} className="text-rose-500" />
@@ -899,7 +999,7 @@
                   </div>
                 </div>
 
-                {/* 3. Lead Time Pipeline (Full Width) */}
+                {/* 3. Lead Time Pipeline */}
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mt-6">
                   <div className="flex items-center gap-2 mb-6">
                     <LucideIcon name="Activity" size={20} className="text-indigo-500" />
@@ -910,11 +1010,9 @@
                   </div>
 
                   <div className="flex flex-col gap-2 mt-4 relative max-w-4xl mx-auto">
-                    {/* Connector Line */}
                     <div className="absolute top-6 left-6 right-6 h-1 bg-slate-100 rounded-full z-0"></div>
 
                     <div className="flex justify-between relative z-10">
-                      {/* Step 1: Request */}
                       <div className="flex flex-col items-center w-24">
                         <div className="w-12 h-12 bg-white border-4 border-blue-500 rounded-full flex items-center justify-center text-blue-600 mb-2 shadow-sm bg-blue-50">
                           <LucideIcon name="Calendar" size={20} />
@@ -923,7 +1021,6 @@
                         <span className="text-[10px] text-slate-400">(REQUEST)</span>
                       </div>
 
-                      {/* Delay 1 */}
                       <div className="flex flex-col items-center justify-start pt-2 flex-1">
                         <span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-600 border border-slate-200">
                           เฉลี่ย {efficiencyData.avgAssignDays} วัน
@@ -931,7 +1028,6 @@
                         <span className="text-[10px] text-slate-400 mt-1 text-center leading-tight">เวลารอจ่ายงาน<br/>(Pending Time)</span>
                       </div>
 
-                      {/* Step 2: Assigned */}
                       <div className="flex flex-col items-center w-24">
                         <div className="w-12 h-12 bg-white border-4 border-amber-500 rounded-full flex items-center justify-center text-amber-600 mb-2 shadow-sm bg-amber-50">
                           <LucideIcon name="Wrench" size={20} />
@@ -940,7 +1036,6 @@
                         <span className="text-[10px] text-slate-400">(ASSIGNED)</span>
                       </div>
 
-                      {/* Delay 2 */}
                       <div className="flex flex-col items-center justify-start pt-2 flex-1">
                         <span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-600 border border-slate-200">
                           เฉลี่ย {efficiencyData.avgRepairDays} วัน
@@ -948,7 +1043,6 @@
                         <span className="text-[10px] text-slate-400 mt-1 text-center leading-tight">เวลาลงมือซ่อมจริง<br/>(Repair Time)</span>
                       </div>
 
-                      {/* Step 3: Completed */}
                       <div className="flex flex-col items-center w-24">
                         <div className="w-12 h-12 bg-white border-4 border-emerald-500 rounded-full flex items-center justify-center text-emerald-600 mb-2 shadow-sm bg-emerald-50">
                           <LucideIcon name="CheckCircle" size={20} />
@@ -962,6 +1056,93 @@
                       <span className="text-sm font-semibold text-slate-600">ระยะเวลารวมเฉลี่ยต่อ 1 งาน (Total Lead Time):</span>
                       <span className="text-2xl font-black text-indigo-600">{efficiencyData.avgTotalLeadTime} <span className="text-sm font-medium text-slate-500">วัน</span></span>
                     </div>
+                  </div>
+                </div>
+
+                {/* --- Priority Analysis --- */}
+                <div className="mt-6 bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                  <div className="flex items-center gap-2 mb-6">
+                    <LucideIcon name="AlertTriangle" size={20} className="text-orange-500" />
+                    <div className="flex flex-col">
+                      <h3 className="text-lg font-bold text-slate-800">วิเคราะห์งานตามระดับความเร่งด่วน (Priority Analysis)</h3>
+                      <p className="text-xs text-slate-500">แสดงจำนวนงานทั้งหมด งานที่ยังไม่เสร็จ (ไม่รวมที่ยกเลิก) และเวลาเฉลี่ยในการปิดงานแยกตามระดับความสำคัญ</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    {priorityDataStats.map((p, idx) => (
+                      <div key={idx} className={`border ${p.styles.border} ${p.styles.bg} p-4 rounded-xl flex flex-col`}>
+                        <div className="flex justify-between items-center mb-4 border-b border-white pb-2">
+                          <span className={`font-black ${p.styles.text} text-sm`}>{p.label}</span>
+                          <span className="bg-white px-2 py-0.5 rounded-md text-xs font-bold text-slate-700 shadow-sm">{p.total} งาน</span>
+                        </div>
+                        <div className="space-y-3 mt-1">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                              <div className={`p-1 rounded-md bg-white shadow-sm ${p.styles.icon}`}>
+                                <LucideIcon name="Activity" size={14}/>
+                              </div>
+                              ยังไม่เสร็จ
+                            </div>
+                            <span className="font-bold text-rose-600 text-lg leading-none">{p.uncompleted}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                              <div className={`p-1 rounded-md bg-white shadow-sm ${p.styles.icon}`}>
+                                <LucideIcon name="Clock" size={14}/>
+                              </div>
+                              ซ่อมเฉลี่ย
+                            </div>
+                            <span className="font-bold text-emerald-600 text-lg leading-none">{p.avgDays} <span className="text-xs text-slate-500 font-medium">วัน</span></span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {priorityDataStats.length === 0 && (
+                       <div className="col-span-full text-center py-8 text-slate-400">ไม่พบข้อมูลความเร่งด่วน (Priority)</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* --- NEW SECTION: Standard Duration Compliance --- */}
+                <div className="mt-6 bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                  <div className="flex items-center gap-2 mb-6">
+                    <LucideIcon name="ShieldCheck" size={20} className="text-emerald-500" />
+                    <div className="flex flex-col">
+                      <h3 className="text-lg font-bold text-slate-800">อัตราความสำเร็จตามเวลามาตรฐาน (Standard Duration Compliance)</h3>
+                      <p className="text-xs text-slate-500">เปรียบเทียบระยะเวลาซ่อมเสร็จจริง กับ มาตรฐานเวลาที่กำหนด (Standard Duration) ในแต่ละระดับความเร่งด่วน (เฉพาะงานที่ Completed)</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {stdComplianceStats.map((stat, idx) => (
+                      <div key={idx} className={`border ${stat.colors.border} rounded-xl p-4 flex flex-col justify-between bg-white shadow-sm hover:shadow-md transition-shadow`}>
+                         <div className="flex justify-between items-start mb-2">
+                           <div>
+                              <span className={`font-black ${stat.colors.text} text-sm`}>{stat.label}</span>
+                              <div className="text-[10px] text-slate-500 font-semibold mt-0.5">มาตรฐาน: {stat.stdDays} วัน</div>
+                           </div>
+                           <div className="text-right">
+                              <span className="text-3xl font-black text-slate-800 leading-none">{stat.passRate.toFixed(0)}<span className="text-lg">%</span></span>
+                           </div>
+                         </div>
+                         
+                         <div className="w-full bg-slate-100 rounded-full h-2.5 mb-4 mt-2">
+                           <div className={`${stat.colors.bar} h-2.5 rounded-full transition-all`} style={{ width: `${stat.passRate}%` }}></div>
+                         </div>
+
+                         <div className="flex justify-between text-xs font-semibold bg-slate-50 px-3 py-2 rounded-lg">
+                           <span className="text-emerald-600 flex items-center gap-1"><LucideIcon name="CheckCircle" size={12} /> ผ่านเกณฑ์: {stat.passed}</span>
+                           <span className="text-rose-500 flex items-center gap-1"><LucideIcon name="AlertCircle" size={12} /> เกินเกณฑ์: {stat.failed}</span>
+                         </div>
+                         <div className="text-center text-[10px] text-slate-400 mt-3 pt-2 border-t border-slate-100">
+                           จากงานเสร็จสิ้นทั้งหมด {stat.total} งาน
+                         </div>
+                      </div>
+                    ))}
+                    {stdComplianceStats.length === 0 && (
+                       <div className="col-span-full text-center py-8 text-slate-400">ไม่พบข้อมูลงานที่เสร็จสิ้นสำหรับเปรียบเทียบ</div>
+                    )}
                   </div>
                 </div>
 
@@ -994,10 +1175,10 @@
                       <LucideIcon name="PieChart" size={20} className="text-slate-400" />
                       <h3 className="text-lg font-bold text-slate-800">สัดส่วนสถานะงานซ่อม (%)</h3>
                     </div>
-                    <div className="flex flex-col md:flex-row items-center justify-around h-48 gap-4 overflow-hidden">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-8">
                       {dynamicPieStatusData.total > 0 ? (
                         <>
-                          <div className="relative w-40 h-40 flex-shrink-0">
+                          <div className="relative w-44 h-44 flex-shrink-0">
                             <svg viewBox="0 0 42 42" className="w-full h-full drop-shadow-sm -rotate-90">
                               <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f1f5f9" strokeWidth="6"></circle>
                               {dynamicPieStatusData.items.map((item, idx) => (
@@ -1010,30 +1191,33 @@
                               ))}
                             </svg>
                             <div className="absolute inset-0 flex flex-col items-center justify-center rounded-full pointer-events-none">
-                              <span className="text-2xl font-bold text-slate-800">{dynamicPieStatusData.total}</span>
+                              <span className="text-3xl font-bold text-slate-800">{dynamicPieStatusData.total}</span>
                               <span className="text-[10px] font-medium text-slate-500">งานทั้งหมด</span>
                             </div>
                           </div>
-                          <div className="flex flex-col gap-2 w-full max-w-[170px] max-h-full overflow-y-auto pr-1">
+                          <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[220px] overflow-y-auto pr-1">
                             {dynamicPieStatusData.items.map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between group">
-                                <div className="flex items-center gap-2 truncate pr-2">
-                                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }}></div>
+                              <div key={idx} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-100 hover:border-slate-200 hover:bg-slate-100 transition-colors">
+                                <div className="flex items-center gap-2 overflow-hidden pr-2">
+                                  <div className="w-3.5 h-3.5 rounded-md flex-shrink-0 shadow-sm" style={{ backgroundColor: item.color }}></div>
                                   <span className="text-xs font-semibold text-slate-700 truncate" title={item.name}>{item.name}</span>
                                 </div>
-                                <span className="text-xs font-bold text-slate-800 flex-shrink-0">{item.pct.toFixed(1)}%</span>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className="text-[10px] text-slate-400 font-medium">{item.count} งาน</span>
+                                  <span className="text-sm font-bold text-slate-800 w-10 text-right">{item.pct.toFixed(0)}%</span>
+                                </div>
                               </div>
                             ))}
                           </div>
                         </>
                       ) : (
-                        <div className="text-center text-slate-400 w-full">ไม่พบข้อมูล</div>
+                        <div className="text-center text-slate-400 w-full py-8">ไม่พบข้อมูล</div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* --- NEW SECTION: Cumulative Monthly Trend --- */}
+                {/* --- Cumulative Monthly Trend --- */}
                 <div className="mt-6 bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col">
                   <div className="flex items-center gap-2 mb-6">
                     <LucideIcon name="TrendingUp" size={20} className="text-blue-500" />
@@ -1166,7 +1350,7 @@
                   </div>
                 </div>
 
-                {/* --- NEW SECTION: Workload Distribution --- */}
+                {/* --- Workload Distribution --- */}
                 <div className="mt-6 bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col">
                   <div className="flex items-center gap-2 mb-6">
                     <LucideIcon name="Users" size={20} className="text-purple-500" />
@@ -1225,7 +1409,7 @@
                   )}
                 </div>
 
-                {/* --- NEW SECTION: Detailed Worker Status --- */}
+                {/* --- Detailed Worker Status --- */}
                 <div className="mt-6 bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col">
                   <div className="flex items-center gap-2 mb-6">
                     <LucideIcon name="FileText" size={20} className="text-teal-500" />
@@ -1309,7 +1493,7 @@
                           )
                         }) : (
                           <tr>
-                            <td colSpan="8" className="p-8 text-center text-slate-400">ไม่พบข้อมูลการมอบหมายงาน</td>
+                            <td col colSpan="8" className="p-8 text-center text-slate-400">ไม่พบข้อมูลการมอบหมายงาน</td>
                           </tr>
                         )}
                       </tbody>
@@ -1317,7 +1501,7 @@
                   </div>
                 </div>
 
-                {/* --- NEW SECTION: Task Performance by Assignee --- */}
+                {/* --- Task Performance by Assignee --- */}
                 <div className="mt-6 bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col">
                   <div className="flex items-center gap-2 mb-6">
                     <LucideIcon name="Target" size={20} className="text-indigo-600" />
