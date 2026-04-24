@@ -150,7 +150,7 @@
             const polylineStr = points.map(p => `${p.x},${p.y}`).join(' ');
 
             return (
-                <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="overflow-visible">
+                <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="overflow-visible mt-2">
                     <text x={pL - 4} y={pT + 3} fontSize="9" fill="#94a3b8" textAnchor="end">{maxVal.toFixed(maxVal < 10 ? 1 : 0)}</text>
                     <text x={pL - 4} y={pT + iH + 3} fontSize="9" fill="#94a3b8" textAnchor="end">{minVal.toFixed(minVal < 10 ? 1 : 0)}</text>
                     
@@ -333,7 +333,7 @@
                   const worksheet = workbook.Sheets[firstSheetName];
                   const parsedData = window.XLSX.utils.sheet_to_json(worksheet, { raw: true, defval: '' });
                   
-                  // ปลดล็อกการกรอง "ชื่อเรื่อง" ทิ้ง เอามาใช้ทุกบรรทัดที่มีข้อมูล
+                  // ดึงมาทุกแถวที่มีข้อมูล ไม่ตัดกรณีที่ไม่มีชื่อเรื่องหรือเลขที่งานแล้ว
                   const validData = parsedData.filter(row => Object.keys(row).length > 0 && Object.values(row).some(v => String(v).trim() !== ''));
 
                   const stdSheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('standard'));
@@ -433,25 +433,40 @@
           const trendStats = useMemo(() => {
              if (filteredData.length === 0) return null;
 
-             // หารายชื่อเดือนทั้งหมดที่มีในข้อมูลที่ถูกกรอง
-             const monthKeysSet = new Set();
+             // จัดการเดือนที่ว่าง (fallback) ให้อยู่ในเดือนแรกสุดที่มีข้อมูล เพื่อให้กราฟสะสมนับรวมไปตั้งแต่ต้น
+             let minMonth = '9999-99';
+             let hasValidDate = false;
              filteredData.forEach(item => {
-                 if (item.APPROVE_REQ_DATE) monthKeysSet.add(item.APPROVE_REQ_DATE.substring(0, 7));
+                 if (item.APPROVE_REQ_DATE) {
+                     const m = item.APPROVE_REQ_DATE.substring(0, 7);
+                     if (m < minMonth) minMonth = m;
+                     hasValidDate = true;
+                 }
              });
-             const sortedMonths = Array.from(monthKeysSet).sort();
-             if(sortedMonths.length === 0) return null;
-             
+             if (!hasValidDate) {
+                 const d = new Date();
+                 minMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`;
+             }
+
+             const monthlyGroups = {};
+             filteredData.forEach(item => {
+                 const mKey = item.APPROVE_REQ_DATE ? item.APPROVE_REQ_DATE.substring(0, 7) : minMonth;
+                 if (!monthlyGroups[mKey]) monthlyGroups[mKey] = { items: [] };
+                 monthlyGroups[mKey].items.push(item);
+             });
+
+             const sortedMonths = Object.keys(monthlyGroups).sort();
              const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
              const formatM = (k) => {
                  const [y, m] = k.split('-');
                  return `${monthNames[parseInt(m)-1]} ${y.substring(2)}`;
              };
 
-             // คำนวณยอดสะสมสำหรับแต่ละเดือน (ใช้เป็นจุดในกราฟ)
+             // คำนวณยอดสะสมสำหรับแต่ละเดือน (ใช้เป็นจุดในกราฟ) โดยดึงข้อมูลทั้งหมดที่ "น้อยกว่าหรือเท่ากับ" เดือนนั้นๆ
              const historyData = sortedMonths.map(mKey => {
-                 // กรองข้อมูลเฉพาะที่เกิดขึ้น "ตั้งแต่ต้นจนถึงเดือนนี้" (Cumulative)
                  const itemsUpToMonth = filteredData.filter(item => {
-                     return item.APPROVE_REQ_DATE && item.APPROVE_REQ_DATE.substring(0, 7) <= mKey;
+                     const itemMKey = item.APPROVE_REQ_DATE ? item.APPROVE_REQ_DATE.substring(0, 7) : minMonth;
+                     return itemMKey <= mKey;
                  });
 
                  let slaTotal = 0, slaHit = 0, leadTotal = 0, leadCount = 0;
@@ -464,7 +479,7 @@
                      if (status === 'COMPLETED') accComp++;
                      else if (status.includes('NEW')) accNew++;
                      else if (status.includes('IN PROGRESS') || status.includes('ASSIGNED')) accProg++;
-                     else if (!status.includes('CANCEL')) accOther++;
+                     else accOther++; // รวมสถานะอื่นๆ หรือ Cancel เข้าไปด้วย เพื่อให้ยอดรวมตรงกับ Main KPI
 
                      // สำหรับกราฟเส้นเวลาและ SLA
                      if (status === 'COMPLETED') {
@@ -1073,8 +1088,7 @@
                     { label: 'ดำเนินการเสร็จสิ้น', val: kpis.completed, unit: 'รายการ', icon: 'CheckCircle', color: 'from-emerald-400 to-teal-500', shadow: 'shadow-emerald-500/20' },
                     { label: 'งานแจ้งใหม่', val: kpis.newJobs, unit: 'รายการ', icon: 'AlertCircle', color: 'from-rose-400 to-red-500', shadow: 'shadow-rose-500/20' },
                     { label: 'เวลาเฉลี่ยต่อชิ้นงาน', val: kpis.avgWorkingDays, unit: 'วัน', icon: 'Clock', color: 'from-amber-400 to-orange-500', shadow: 'shadow-amber-500/20' }
-                  ].map((kpi, i) => {
-                    return (
+                  ].map((kpi, i) => (
                     <div key={i} className="glass-card rounded-[2rem] p-6 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300 hover:shadow-xl cursor-default">
                       <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${kpi.color} opacity-10 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-110`}></div>
                       <div className="flex items-center gap-5 relative z-10">
@@ -1090,7 +1104,7 @@
                         </div>
                       </div>
                     </div>
-                  )})}
+                  ))}
                 </div>
 
                 {/* ================= SECTION 2: SLA & TIME PERFORMANCE ================= */}
