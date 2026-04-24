@@ -214,7 +214,7 @@
             const maxTotal = Math.max(...data.map(d => d.total)) || 1;
             
             return (
-                <div className="flex items-end h-full gap-1.5 mt-2 w-full">
+                <div className="flex items-end h-full gap-2 mt-2 w-full pt-4">
                     {data.map((d, i) => {
                         const innerTotal = d.total || 1;
                         const hComp = (d.comp / innerTotal) * 100;
@@ -224,13 +224,23 @@
                         const isLast = i === data.length - 1;
                         
                         return (
-                            <div key={i} className={`flex flex-col justify-end h-full flex-1 group ${isLast ? 'opacity-100' : 'opacity-60 hover:opacity-100'} transition-opacity cursor-pointer`}>
-                                <div className="text-[9px] font-bold text-center text-slate-400 mb-1 leading-none group-hover:text-slate-800 transition-colors">{d.total}</div>
-                                <div className="w-full bg-slate-100 rounded-t-md flex flex-col-reverse overflow-hidden" style={{height: `${(d.total/maxTotal)*100}%`, minHeight: '4px'}}>
-                                    {hComp > 0 && <div style={{height: `${hComp}%`}} className="bg-emerald-500 w-full" title={`เสร็จ: ${d.comp}`}></div>}
-                                    {hProg > 0 && <div style={{height: `${hProg}%`}} className="bg-amber-400 w-full" title={`กำลังทำ: ${d.prog}`}></div>}
-                                    {hNew > 0 && <div style={{height: `${hNew}%`}} className="bg-rose-500 w-full" title={`งานใหม่: ${d.new}`}></div>}
-                                    {hOther > 0 && <div style={{height: `${hOther}%`}} className="bg-slate-400 w-full" title={`อื่นๆ: ${d.other}`}></div>}
+                            <div key={i} className={`flex flex-col justify-end h-full flex-1 group ${isLast ? 'opacity-100' : 'opacity-70 hover:opacity-100'} transition-all cursor-pointer`}>
+                                {/* Number on top */}
+                                <div className="text-[10px] font-bold text-center text-slate-400 mb-1.5 leading-none group-hover:text-slate-800 transition-colors group-hover:-translate-y-0.5 transform duration-300">
+                                    {d.total}
+                                </div>
+                                
+                                {/* Stacked Bar */}
+                                <div className="w-full bg-slate-100 flex flex-col-reverse overflow-hidden rounded-t-md shadow-sm relative" style={{height: `${(d.total/maxTotal)*100}%`, minHeight: '8px'}}>
+                                    {hComp > 0 && <div style={{height: `${hComp}%`}} className="bg-emerald-500 w-full hover:brightness-110 transition-all" title={`เสร็จ: ${d.comp}`}></div>}
+                                    {hProg > 0 && <div style={{height: `${hProg}%`}} className="bg-amber-400 w-full hover:brightness-110 transition-all" title={`กำลังทำ: ${d.prog}`}></div>}
+                                    {hNew > 0 && <div style={{height: `${hNew}%`}} className="bg-rose-500 w-full hover:brightness-110 transition-all" title={`งานใหม่: ${d.new}`}></div>}
+                                    {hOther > 0 && <div style={{height: `${hOther}%`}} className="bg-slate-400 w-full hover:brightness-110 transition-all" title={`อื่นๆ: ${d.other}`}></div>}
+                                </div>
+
+                                {/* X-Axis Label (Month) */}
+                                <div className="text-[10px] font-bold text-slate-500 text-center mt-1.5 border-t-2 border-slate-100 pt-1.5 truncate w-full group-hover:text-indigo-600 transition-colors group-hover:border-indigo-200">
+                                    {d.label.split(' ')[0]}
                                 </div>
                             </div>
                         );
@@ -629,7 +639,7 @@
                   if (!isNaN(ass) && !isNaN(comp)) {
                     ass.setHours(0,0,0,0); comp.setHours(0,0,0,0);
                     const diff = (comp - ass) / 86400000;
-                    if (diff >= 0 && diff <= 365) { totalRepairTime += diff; repairCount++; }
+                    if (diff >= 0 && diff <= 365) { totalRepairTime += diff; repairCount++; } // Limit to 365
                   }
                 }
               } else if (!status.includes('CANCEL')) {
@@ -1056,7 +1066,7 @@
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                      {/* 1. SLA Trend */}
-                     <div className="glass-card p-5 rounded-3xl relative overflow-hidden group flex flex-col justify-between min-h-[220px]">
+                     <div className="glass-card p-5 rounded-3xl relative overflow-hidden group flex flex-col justify-between min-h-[260px]">
                         <div>
                           <div className="flex justify-between items-start mb-2">
                              <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl"><LucideIcon name="Target" size={24} /></div>
@@ -1064,13 +1074,13 @@
                           </div>
                           <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">ส่งมอบตรงเวลา (SLA) รวม</h4>
                         </div>
-                        <div className="flex-1 w-full mt-2 h-[100px]">
+                        <div className="flex-1 w-full mt-4 h-[140px]">
                            <TrendChart data={trendStats.sla.history} color="#10b981" />
                         </div>
                      </div>
 
                      {/* 2. Lead Time Trend */}
-                     <div className="glass-card p-5 rounded-3xl relative overflow-hidden group flex flex-col justify-between min-h-[220px]">
+                     <div className="glass-card p-5 rounded-3xl relative overflow-hidden group flex flex-col justify-between min-h-[260px]">
                         <div>
                           <div className="flex justify-between items-start mb-2">
                              <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl"><LucideIcon name="Timer" size={24} /></div>
@@ -1078,13 +1088,13 @@
                           </div>
                           <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">เวลาซ่อมเฉลี่ยรวม</h4>
                         </div>
-                        <div className="flex-1 w-full mt-2 h-[100px]">
+                        <div className="flex-1 w-full mt-4 h-[140px]">
                            <TrendChart data={trendStats.lead.history} color="#3b82f6" />
                         </div>
                      </div>
 
                      {/* 3. Cumulative Bar Chart */}
-                     <div className="glass-card p-5 rounded-3xl relative overflow-hidden group flex flex-col justify-between min-h-[220px]">
+                     <div className="glass-card p-5 rounded-3xl relative overflow-hidden group flex flex-col justify-between min-h-[260px]">
                         <div>
                           <div className="flex justify-between items-start mb-1">
                              <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl"><LucideIcon name="BarChart3" size={24} /></div>
@@ -1097,13 +1107,13 @@
                              <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm bg-rose-500"></div>งานใหม่</span>
                           </div>
                         </div>
-                        <div className="flex-1 w-full mt-1 h-[100px] flex items-end">
+                        <div className="flex-1 w-full mt-2 h-[140px] flex items-end">
                            <MiniCumulativeBar data={trendStats.cumulative} />
                         </div>
                      </div>
 
                      {/* 4. Top Closer */}
-                     <div className="glass-card p-6 rounded-3xl relative overflow-hidden group bg-gradient-to-br from-indigo-900 to-slate-900 border-none flex flex-col justify-center min-h-[220px]">
+                     <div className="glass-card p-6 rounded-3xl relative overflow-hidden group bg-gradient-to-br from-indigo-900 to-slate-900 border-none flex flex-col justify-center min-h-[260px]">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
                         <div className="flex justify-between items-start mb-4 relative z-10">
                            <div className="p-3 bg-white/10 text-amber-400 rounded-xl backdrop-blur-sm border border-white/10"><LucideIcon name="Trophy" size={24} /></div>
