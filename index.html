@@ -177,44 +177,13 @@
             );
         }
 
-        // --- Clean Sparkline Component ---
-        function CleanSparkline({ data, color }) {
-            if (!data || data.length < 2) return <div className="h-12 w-full flex items-end"><div className="w-full border-b border-dashed border-slate-200"></div></div>;
-            const validData = data.map(d => d === null ? 0 : d);
-            const max = Math.max(...validData);
-            const min = Math.min(...validData);
-            const range = max - min === 0 ? 1 : max - min;
-            const w = 240, h = 40;
-            
-            const points = validData.map((val, i) => {
-                const x = (i / (validData.length - 1)) * w;
-                const y = h - (((val - min) / range) * h * 0.7) - (h * 0.15); 
-                return `${x},${y}`;
-            }).join(' ');
-
-            return (
-                <svg width="100%" height="45" viewBox={`-5 0 ${w + 10} ${h}`} preserveAspectRatio="none" className="mt-2 overflow-visible">
-                    <polyline points={points} fill="none" stroke={color} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-80" />
-                    {validData.map((val, i) => {
-                        const x = (i / (validData.length - 1)) * w;
-                        const y = h - (((val - min) / range) * h * 0.7) - (h * 0.15);
-                        const isLast = i === validData.length - 1;
-                        if (isLast) {
-                            return <circle key={i} cx={x} cy={y} r="4.5" fill="#fff" stroke={color} strokeWidth="3" className="animate-pulse shadow-xl" />
-                        }
-                        return <circle key={i} cx={x} cy={y} r="2" fill={color} />
-                    })}
-                </svg>
-            );
-        }
-
-        // --- Mini Cumulative Stacked Bar ---
+        // --- Mini Cumulative Stacked Bar (FIXED PROPORTIONS) ---
         function MiniCumulativeBar({ data }) {
             if (!data || data.length === 0) return <div className="h-12 w-full border-b border-dashed border-slate-200 mt-2"></div>;
             const maxTotal = Math.max(...data.map(d => d.total)) || 1;
             
             return (
-                <div className="flex items-end h-full gap-2 mt-2 w-full pt-4">
+                <div className="flex items-end h-full gap-2 w-full pt-4">
                     {data.map((d, i) => {
                         const innerTotal = d.total || 1;
                         const hComp = (d.comp / innerTotal) * 100;
@@ -224,22 +193,23 @@
                         const isLast = i === data.length - 1;
                         
                         return (
-                            <div key={i} className={`flex flex-col justify-end h-full flex-1 group ${isLast ? 'opacity-100' : 'opacity-70 hover:opacity-100'} transition-all cursor-pointer`}>
-                                {/* Number on top */}
-                                <div className="text-[10px] font-bold text-center text-slate-400 mb-1.5 leading-none group-hover:text-slate-800 transition-colors group-hover:-translate-y-0.5 transform duration-300">
-                                    {d.total}
+                            <div key={i} className={`flex flex-col h-full flex-1 group ${isLast ? 'opacity-100' : 'opacity-70 hover:opacity-100'} transition-all cursor-pointer`}>
+                                {/* Main Chart Area using absolute positioning to avoid flexbox % collapse */}
+                                <div className="relative w-full flex-1">
+                                    {/* The Stacked Bar container anchored to bottom */}
+                                    <div className="absolute bottom-0 left-0 w-full flex flex-col-reverse rounded-t-md overflow-hidden bg-slate-100 shadow-sm" style={{ height: `${(d.total/maxTotal)*100}%`, minHeight: '4px' }}>
+                                        {hComp > 0 && <div style={{ height: `${hComp}%` }} className="bg-emerald-500 w-full hover:brightness-110 transition-all" title={`เสร็จ: ${d.comp}`}></div>}
+                                        {hProg > 0 && <div style={{ height: `${hProg}%` }} className="bg-amber-400 w-full hover:brightness-110 transition-all" title={`กำลังทำ: ${d.prog}`}></div>}
+                                        {hNew > 0 && <div style={{ height: `${hNew}%` }} className="bg-rose-500 w-full hover:brightness-110 transition-all" title={`งานใหม่: ${d.new}`}></div>}
+                                        {hOther > 0 && <div style={{ height: `${hOther}%` }} className="bg-slate-400 w-full hover:brightness-110 transition-all" title={`อื่นๆ: ${d.other}`}></div>}
+                                    </div>
+                                    {/* Number Floating Above the Bar */}
+                                    <div className="absolute w-full text-center text-[10px] font-bold text-slate-400 group-hover:text-slate-800 transition-all group-hover:-translate-y-0.5" style={{ bottom: `calc(${(d.total/maxTotal)*100}% + 4px)` }}>
+                                        {d.total}
+                                    </div>
                                 </div>
-                                
-                                {/* Stacked Bar */}
-                                <div className="w-full bg-slate-100 flex flex-col-reverse overflow-hidden rounded-t-md shadow-sm relative" style={{height: `${(d.total/maxTotal)*100}%`, minHeight: '8px'}}>
-                                    {hComp > 0 && <div style={{height: `${hComp}%`}} className="bg-emerald-500 w-full hover:brightness-110 transition-all" title={`เสร็จ: ${d.comp}`}></div>}
-                                    {hProg > 0 && <div style={{height: `${hProg}%`}} className="bg-amber-400 w-full hover:brightness-110 transition-all" title={`กำลังทำ: ${d.prog}`}></div>}
-                                    {hNew > 0 && <div style={{height: `${hNew}%`}} className="bg-rose-500 w-full hover:brightness-110 transition-all" title={`งานใหม่: ${d.new}`}></div>}
-                                    {hOther > 0 && <div style={{height: `${hOther}%`}} className="bg-slate-400 w-full hover:brightness-110 transition-all" title={`อื่นๆ: ${d.other}`}></div>}
-                                </div>
-
-                                {/* X-Axis Label (Month) */}
-                                <div className="text-[10px] font-bold text-slate-500 text-center mt-1.5 border-t-2 border-slate-100 pt-1.5 truncate w-full group-hover:text-indigo-600 transition-colors group-hover:border-indigo-200">
+                                {/* X-Axis label area */}
+                                <div className="h-6 mt-1 border-t-2 border-slate-100 pt-1.5 text-[10px] font-bold text-slate-500 text-center truncate w-full group-hover:text-indigo-600 transition-colors group-hover:border-indigo-200">
                                     {d.label.split(' ')[0]}
                                 </div>
                             </div>
@@ -363,7 +333,8 @@
                   const worksheet = workbook.Sheets[firstSheetName];
                   const parsedData = window.XLSX.utils.sheet_to_json(worksheet, { raw: true, defval: '' });
                   
-                  const validData = parsedData.filter(row => row['ชื่อเรื่อง'] && String(row['ชื่อเรื่อง']).trim() !== '');
+                  // ปลดล็อกการกรอง "ชื่อเรื่อง" ทิ้ง เอามาใช้ทุกบรรทัดที่มีข้อมูล
+                  const validData = parsedData.filter(row => Object.keys(row).length > 0 && Object.values(row).some(v => String(v).trim() !== ''));
 
                   const stdSheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('standard'));
                   let newStdDurMap = { ...stdDurations }; 
@@ -434,8 +405,6 @@
 
           const filteredData = useMemo(() => {
             return data.filter(item => {
-              if (!item['ชื่อเรื่อง'] || String(item['ชื่อเรื่อง']).trim() === '') return false;
-              
               const dateStr = item.APPROVE_REQ_DATE || '';
               let matchYear = filterYears.length === 0;
               let matchMonth = filterMonths.length === 0;
@@ -460,27 +429,17 @@
             });
           }, [data, filterYears, filterMonths, filterDays, filterAssignees]);
 
-          // --- Executive Snapshot ---
+          // --- Executive Snapshot (Cumulative Trends) ---
           const trendStats = useMemo(() => {
              if (filteredData.length === 0) return null;
 
-             const monthlyGroups = {};
-             let totalIncoming = 0;
-             let totalCompleted = 0;
-
+             // หารายชื่อเดือนทั้งหมดที่มีในข้อมูลที่ถูกกรอง
+             const monthKeysSet = new Set();
              filteredData.forEach(item => {
-                 totalIncoming++;
-                 if ((item.JOB_STATUS || '').toUpperCase().trim() === 'COMPLETED') {
-                     totalCompleted++;
-                 }
-
-                 if (!item.APPROVE_REQ_DATE) return;
-                 const mKey = item.APPROVE_REQ_DATE.substring(0, 7);
-                 if (!monthlyGroups[mKey]) monthlyGroups[mKey] = { items: [] };
-                 monthlyGroups[mKey].items.push(item);
+                 if (item.APPROVE_REQ_DATE) monthKeysSet.add(item.APPROVE_REQ_DATE.substring(0, 7));
              });
-
-             const sortedMonths = Object.keys(monthlyGroups).sort();
+             const sortedMonths = Array.from(monthKeysSet).sort();
+             if(sortedMonths.length === 0) return null;
              
              const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
              const formatM = (k) => {
@@ -488,28 +447,27 @@
                  return `${monthNames[parseInt(m)-1]} ${y.substring(2)}`;
              };
 
-             let accComp = 0, accProg = 0, accNew = 0, accOther = 0;
-             const cumulativeData = sortedMonths.map(mKey => {
-                 const mData = monthlyGroups[mKey];
-                 mData.items.forEach(item => {
+             // คำนวณยอดสะสมสำหรับแต่ละเดือน (ใช้เป็นจุดในกราฟ)
+             const historyData = sortedMonths.map(mKey => {
+                 // กรองข้อมูลเฉพาะที่เกิดขึ้น "ตั้งแต่ต้นจนถึงเดือนนี้" (Cumulative)
+                 const itemsUpToMonth = filteredData.filter(item => {
+                     return item.APPROVE_REQ_DATE && item.APPROVE_REQ_DATE.substring(0, 7) <= mKey;
+                 });
+
+                 let slaTotal = 0, slaHit = 0, leadTotal = 0, leadCount = 0;
+                 let accComp = 0, accProg = 0, accNew = 0, accOther = 0;
+
+                 itemsUpToMonth.forEach(item => {
                      const status = (item.JOB_STATUS || '').toUpperCase().trim();
+                     
+                     // สำหรับกราฟแท่งสะสม
                      if (status === 'COMPLETED') accComp++;
                      else if (status.includes('NEW')) accNew++;
                      else if (status.includes('IN PROGRESS') || status.includes('ASSIGNED')) accProg++;
-                     else if (!status.includes('CANCEL')) accOther++; 
-                 });
-                 return {
-                     monthKey: mKey, label: formatM(mKey),
-                     comp: accComp, prog: accProg, new: accNew, other: accOther,
-                     total: accComp + accProg + accNew + accOther
-                 };
-             });
+                     else if (!status.includes('CANCEL')) accOther++;
 
-             const historyData = sortedMonths.map(mKey => {
-                 const mData = monthlyGroups[mKey];
-                 let slaTotal = 0, slaHit = 0, leadTotal = 0, leadCount = 0;
-                 mData.items.forEach(item => {
-                     if ((item.JOB_STATUS || '').toUpperCase().trim() === 'COMPLETED') {
+                     // สำหรับกราฟเส้นเวลาและ SLA
+                     if (status === 'COMPLETED') {
                          if (item.COMPLETION_DATE && item.DUE_DATE) {
                              slaTotal++;
                              if (new Date(item.COMPLETION_DATE) <= new Date(item.DUE_DATE)) slaHit++;
@@ -519,38 +477,27 @@
                              const e = new Date(item.COMPLETION_DATE);
                              if (!isNaN(s) && !isNaN(e)) {
                                  const d = (e - s) / 86400000;
+                                 // ตัด Outlier (ป้องกันคนพิมพ์ พ.ศ. สลับ ค.ศ.) ข้อมูลต้องอยู่ในช่วง 0-365 วัน
                                  if (d >= 0 && d <= 365) { leadTotal += d; leadCount++; }
                              }
                          }
                      }
                  });
+
                  return {
-                     monthKey: mKey, label: formatM(mKey),
+                     monthKey: mKey, 
+                     label: formatM(mKey),
                      sla: slaTotal > 0 ? (slaHit / slaTotal) * 100 : null,
-                     lead: leadCount > 0 ? leadTotal / leadCount : null
+                     lead: leadCount > 0 ? leadTotal / leadCount : null,
+                     comp: accComp, 
+                     prog: accProg, 
+                     new: accNew, 
+                     other: accOther,
+                     total: accComp + accProg + accNew + accOther
                  };
              });
 
-             let totalSlaTotal = 0, totalSlaHit = 0, totalLeadDays = 0, totalLeadCount = 0;
-             filteredData.forEach(item => {
-                 if ((item.JOB_STATUS || '').toUpperCase().trim() === 'COMPLETED') {
-                     if (item.COMPLETION_DATE && item.DUE_DATE) {
-                         totalSlaTotal++;
-                         if (new Date(item.COMPLETION_DATE) <= new Date(item.DUE_DATE)) totalSlaHit++;
-                     }
-                     if (item.APPROVE_REQ_DATE && item.COMPLETION_DATE) {
-                         const s = new Date(item.APPROVE_REQ_DATE);
-                         const e = new Date(item.COMPLETION_DATE);
-                         if (!isNaN(s) && !isNaN(e)) {
-                             const d = (e - s) / 86400000;
-                             if (d >= 0 && d <= 365) { totalLeadDays += d; totalLeadCount++; }
-                         }
-                     }
-                 }
-             });
-
-             const currentSla = totalSlaTotal > 0 ? (totalSlaHit / totalSlaTotal) * 100 : null;
-             const currentLead = totalLeadCount > 0 ? totalLeadDays / totalLeadCount : null;
+             const lastMonth = historyData[historyData.length - 1];
 
              const counts = {};
              filteredData.forEach(d => {
@@ -566,10 +513,10 @@
 
              return {
                  summaryPeriod: sortedMonths.length > 1 ? `${formatM(sortedMonths[0])} - ${formatM(sortedMonths[sortedMonths.length-1])}` : formatM(sortedMonths[0]),
-                 sla: { val: currentSla, history: historyData.map(d => ({ label: d.label, val: d.sla })) },
-                 lead: { val: currentLead, history: historyData.map(d => ({ label: d.label, val: d.lead })) },
-                 clear: { incoming: totalIncoming, completed: totalCompleted },
-                 cumulative: cumulativeData,
+                 sla: { val: lastMonth.sla, history: historyData.map(d => ({ label: d.label, val: d.sla })) },
+                 lead: { val: lastMonth.lead, history: historyData.map(d => ({ label: d.label, val: d.lead })) },
+                 clear: { incoming: lastMonth.total, completed: lastMonth.comp },
+                 cumulative: historyData, 
                  topCloser
              };
           }, [filteredData]);
@@ -621,26 +568,19 @@
                     comp.setHours(0,0,0,0); due.setHours(0,0,0,0);
                     if (comp <= due) onTimeCount++; else lateCount++;
                     slaTotal++;
-                  } else noSlaDataCount++;
-                } else noSlaDataCount++; 
+                  }
+                } 
 
-                if (item.APPROVE_REQ_DATE && item.ASSIGNED_DATE) {
-                  const req = new Date(item.APPROVE_REQ_DATE);
-                  const ass = new Date(item.ASSIGNED_DATE);
-                  if (!isNaN(req) && !isNaN(ass)) {
-                    req.setHours(0,0,0,0); ass.setHours(0,0,0,0);
-                    const diff = (ass - req) / 86400000;
-                    if (diff >= 0 && diff < 3650) { totalAssignDelay += diff; assignCount++; }
-                  }
-                }
-                if (item.ASSIGNED_DATE && item.COMPLETION_DATE) {
-                  const ass = new Date(item.ASSIGNED_DATE);
-                  const comp = new Date(item.COMPLETION_DATE);
-                  if (!isNaN(ass) && !isNaN(comp)) {
-                    ass.setHours(0,0,0,0); comp.setHours(0,0,0,0);
-                    const diff = (comp - ass) / 86400000;
-                    if (diff >= 0 && diff <= 365) { totalRepairTime += diff; repairCount++; } // Limit to 365
-                  }
+                if (item.APPROVE_REQ_DATE && item.COMPLETION_DATE) {
+                    const s = new Date(item.APPROVE_REQ_DATE);
+                    const e = new Date(item.COMPLETION_DATE);
+                    if (!isNaN(s) && !isNaN(e)) {
+                        const d = (e - s) / 86400000;
+                        if (d >= 0 && d <= 365) { 
+                            totalRepairTime += d; 
+                            repairCount++; 
+                        }
+                    }
                 }
               } else if (!status.includes('CANCEL')) {
                  if (item.DUE_DATE) {
@@ -656,14 +596,14 @@
             });
 
             return {
-              onTimeCount, lateCount, slaTotal, noSlaDataCount,
+              onTimeCount, lateCount, slaTotal,
               onTimePct: slaTotal > 0 ? (onTimeCount / slaTotal) * 100 : 0,
               activeOverdueCount, activeOnTrackCount, activeNoDueCount, activeTotalWithDue,
               overduePct: activeTotalWithDue > 0 ? (activeOverdueCount / activeTotalWithDue) * 100 : 0,
               onTrackPct: activeTotalWithDue > 0 ? (activeOnTrackCount / activeTotalWithDue) * 100 : 0,
-              avgAssignDays: assignCount > 0 ? (totalAssignDelay / assignCount).toFixed(1) : 0,
-              avgRepairDays: repairCount > 0 ? (totalRepairTime / repairCount).toFixed(1) : 0,
-              avgTotalLeadTime: assignCount > 0 && repairCount > 0 ? ((totalAssignDelay / assignCount) + (totalRepairTime / repairCount)).toFixed(1) : 0
+              avgTotalLeadTime: repairCount > 0 ? (totalRepairTime / repairCount).toFixed(1) : 0,
+              avgAssignDays: 0,
+              avgRepairDays: repairCount > 0 ? (totalRepairTime / repairCount).toFixed(1) : 0
             };
           }, [filteredData]);
 
@@ -715,7 +655,6 @@
             };
 
             filteredData.forEach(item => {
-              if (!item['ชื่อเรื่อง'] || String(item['ชื่อเรื่อง']).trim() === '') return;
               let prio = (item.PRIORITY || '').toUpperCase().trim();
               let key = 'NOT ASSIGNED';
               if (prio.includes('CRITICAL')) key = 'CRITICAL';
@@ -757,7 +696,6 @@
             };
 
             filteredData.forEach(item => {
-              if (!item['ชื่อเรื่อง'] || String(item['ชื่อเรื่อง']).trim() === '') return;
               if ((item.JOB_STATUS || '').toUpperCase().trim() !== 'COMPLETED') return; 
 
               let prio = (item.PRIORITY || '').toUpperCase().trim();
@@ -796,7 +734,6 @@
             let validTotalJobs = 0;
 
             filteredData.forEach(item => {
-              if (!item['ชื่อเรื่อง'] || String(item['ชื่อเรื่อง']).trim() === '') return;
               validTotalJobs++;
 
               let statusCat = 'OTHER';
@@ -842,7 +779,6 @@
             const today = new Date(); today.setHours(0,0,0,0);
 
             filteredData.forEach(item => {
-              if (!item['ชื่อเรื่อง'] || String(item['ชื่อเรื่อง']).trim() === '') return;
               const status = (item.JOB_STATUS || '').toUpperCase().trim();
               const dueDateStr = item.DUE_DATE;
               
@@ -1137,7 +1073,8 @@
                     { label: 'ดำเนินการเสร็จสิ้น', val: kpis.completed, unit: 'รายการ', icon: 'CheckCircle', color: 'from-emerald-400 to-teal-500', shadow: 'shadow-emerald-500/20' },
                     { label: 'งานแจ้งใหม่', val: kpis.newJobs, unit: 'รายการ', icon: 'AlertCircle', color: 'from-rose-400 to-red-500', shadow: 'shadow-rose-500/20' },
                     { label: 'เวลาเฉลี่ยต่อชิ้นงาน', val: kpis.avgWorkingDays, unit: 'วัน', icon: 'Clock', color: 'from-amber-400 to-orange-500', shadow: 'shadow-amber-500/20' }
-                  ].map((kpi, i) => (
+                  ].map((kpi, i) => {
+                    return (
                     <div key={i} className="glass-card rounded-[2rem] p-6 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300 hover:shadow-xl cursor-default">
                       <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${kpi.color} opacity-10 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-110`}></div>
                       <div className="flex items-center gap-5 relative z-10">
@@ -1153,7 +1090,7 @@
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
 
                 {/* ================= SECTION 2: SLA & TIME PERFORMANCE ================= */}
