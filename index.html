@@ -333,7 +333,7 @@
                   const worksheet = workbook.Sheets[firstSheetName];
                   const parsedData = window.XLSX.utils.sheet_to_json(worksheet, { raw: true, defval: '' });
                   
-                  // ดึงมาทุกแถวที่มีข้อมูล ไม่ตัดกรณีที่ไม่มีชื่อเรื่องหรือเลขที่งานแล้ว
+                  // ดึงมาทุกแถวที่มีข้อมูล
                   const validData = parsedData.filter(row => Object.keys(row).length > 0 && Object.values(row).some(v => String(v).trim() !== ''));
 
                   const stdSheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('standard'));
@@ -433,7 +433,6 @@
           const trendStats = useMemo(() => {
              if (filteredData.length === 0) return null;
 
-             // จัดการเดือนที่ว่าง (fallback) ให้อยู่ในเดือนแรกสุดที่มีข้อมูล เพื่อให้กราฟสะสมนับรวมไปตั้งแต่ต้น
              let minMonth = '9999-99';
              let hasValidDate = false;
              filteredData.forEach(item => {
@@ -462,7 +461,6 @@
                  return `${monthNames[parseInt(m)-1]} ${y.substring(2)}`;
              };
 
-             // คำนวณยอดสะสมสำหรับแต่ละเดือน (ใช้เป็นจุดในกราฟ) โดยดึงข้อมูลทั้งหมดที่ "น้อยกว่าหรือเท่ากับ" เดือนนั้นๆ
              const historyData = sortedMonths.map(mKey => {
                  const itemsUpToMonth = filteredData.filter(item => {
                      const itemMKey = item.APPROVE_REQ_DATE ? item.APPROVE_REQ_DATE.substring(0, 7) : minMonth;
@@ -475,13 +473,11 @@
                  itemsUpToMonth.forEach(item => {
                      const status = (item.JOB_STATUS || '').toUpperCase().trim();
                      
-                     // สำหรับกราฟแท่งสะสม
                      if (status === 'COMPLETED') accComp++;
                      else if (status.includes('NEW')) accNew++;
                      else if (status.includes('IN PROGRESS') || status.includes('ASSIGNED')) accProg++;
-                     else accOther++; // รวมสถานะอื่นๆ หรือ Cancel เข้าไปด้วย เพื่อให้ยอดรวมตรงกับ Main KPI
+                     else accOther++; 
 
-                     // สำหรับกราฟเส้นเวลาและ SLA
                      if (status === 'COMPLETED') {
                          if (item.COMPLETION_DATE && item.DUE_DATE) {
                              slaTotal++;
@@ -492,7 +488,6 @@
                              const e = new Date(item.COMPLETION_DATE);
                              if (!isNaN(s) && !isNaN(e)) {
                                  const d = (e - s) / 86400000;
-                                 // ตัด Outlier (ป้องกันคนพิมพ์ พ.ศ. สลับ ค.ศ.) ข้อมูลต้องอยู่ในช่วง 0-365 วัน
                                  if (d >= 0 && d <= 365) { leadTotal += d; leadCount++; }
                              }
                          }
@@ -567,15 +562,34 @@
 
           const efficiencyData = useMemo(() => {
             let onTimeCount = 0, lateCount = 0, slaTotal = 0;
-            let totalAssignDelay = 0, assignCount = 0;
-            let totalRepairTime = 0, repairCount = 0;
             let noSlaDataCount = 0; 
             let activeOverdueCount = 0, activeOnTrackCount = 0, activeNoDueCount = 0, activeTotalWithDue = 0;
+            
+            // New Pipeline Variables
+            let totalAssignDays = 0, validAssignCount = 0;
+            let totalRepairDays = 0, validRepairCount = 0;
+            let totalLeadDays = 0, validLeadCount = 0;
+            
             const today = new Date(); today.setHours(0,0,0,0);
 
             filteredData.forEach(item => {
               const status = (item.JOB_STATUS || '').toUpperCase().trim();
+
+              // Pipeline: Assign Time (Approve -> Assign)
+              if (item.APPROVE_REQ_DATE && item.ASSIGNED_DATE) {
+                  const req = new Date(item.APPROVE_REQ_DATE);
+                  const ass = new Date(item.ASSIGNED_DATE);
+                  if (!isNaN(req) && !isNaN(ass)) {
+                      const diff = (ass - req) / 86400000;
+                      if (diff >= 0 && diff <= 365) {
+                          totalAssignDays += diff;
+                          validAssignCount++;
+                      }
+                  }
+              }
+
               if (status === 'COMPLETED') {
+                // SLA Logic
                 if (item.COMPLETION_DATE && item.DUE_DATE) {
                   const comp = new Date(item.COMPLETION_DATE);
                   const due = new Date(item.DUE_DATE);
@@ -583,17 +597,31 @@
                     comp.setHours(0,0,0,0); due.setHours(0,0,0,0);
                     if (comp <= due) onTimeCount++; else lateCount++;
                     slaTotal++;
-                  }
-                } 
+                  } else noSlaDataCount++;
+                } else noSlaDataCount++; 
 
+                // Pipeline: Repair Time (Assign -> Complete)
+                if (item.ASSIGNED_DATE && item.COMPLETION_DATE) {
+                    const ass = new Date(item.ASSIGNED_DATE);
+                    const comp = new Date(item.COMPLETION_DATE);
+                    if (!isNaN(ass) && !isNaN(comp)) {
+                        const diff = (comp - ass) / 86400000;
+                        if (diff >= 0 && diff <= 365) { 
+                            totalRepairDays += diff; 
+                            validRepairCount++; 
+                        }
+                    }
+                }
+
+                // Pipeline: Total Lead Time (Approve -> Complete)
                 if (item.APPROVE_REQ_DATE && item.COMPLETION_DATE) {
-                    const s = new Date(item.APPROVE_REQ_DATE);
-                    const e = new Date(item.COMPLETION_DATE);
-                    if (!isNaN(s) && !isNaN(e)) {
-                        const d = (e - s) / 86400000;
-                        if (d >= 0 && d <= 365) { 
-                            totalRepairTime += d; 
-                            repairCount++; 
+                    const req = new Date(item.APPROVE_REQ_DATE);
+                    const comp = new Date(item.COMPLETION_DATE);
+                    if (!isNaN(req) && !isNaN(comp)) {
+                        const diff = (comp - req) / 86400000;
+                        if (diff >= 0 && diff <= 365) {
+                            totalLeadDays += diff;
+                            validLeadCount++;
                         }
                     }
                 }
@@ -611,14 +639,14 @@
             });
 
             return {
-              onTimeCount, lateCount, slaTotal,
+              onTimeCount, lateCount, slaTotal, noSlaDataCount,
               onTimePct: slaTotal > 0 ? (onTimeCount / slaTotal) * 100 : 0,
               activeOverdueCount, activeOnTrackCount, activeNoDueCount, activeTotalWithDue,
               overduePct: activeTotalWithDue > 0 ? (activeOverdueCount / activeTotalWithDue) * 100 : 0,
               onTrackPct: activeTotalWithDue > 0 ? (activeOnTrackCount / activeTotalWithDue) * 100 : 0,
-              avgTotalLeadTime: repairCount > 0 ? (totalRepairTime / repairCount).toFixed(1) : 0,
-              avgAssignDays: 0,
-              avgRepairDays: repairCount > 0 ? (totalRepairTime / repairCount).toFixed(1) : 0
+              avgAssignDays: validAssignCount > 0 ? (totalAssignDays / validAssignCount).toFixed(1) : 0,
+              avgRepairDays: validRepairCount > 0 ? (totalRepairDays / validRepairCount).toFixed(1) : 0,
+              avgTotalLeadTime: validLeadCount > 0 ? (totalLeadDays / validLeadCount).toFixed(1) : 0
             };
           }, [filteredData]);
 
